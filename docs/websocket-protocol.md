@@ -12,7 +12,8 @@ OpenAPI is served at `/openapi`. All JSON input schemas are strict: unknown prop
 {
   "standalonePlayerId": "11111111-1111-4111-8111-111111111111",
   "mode": "singleShot",
-  "opponent": "human"
+  "opponent": "bot",
+  "difficulty": "normal"
 }
 ```
 
@@ -28,7 +29,7 @@ Human matches return:
 }
 ```
 
-Bot responses use `kind: "botMatch"` and omit `joinUrl` entirely.
+Computer matches require `difficulty` as `easy`, `normal`, or `hard`; human matches use `opponent: "human"` and do not accept that field. Bot responses use `kind: "botMatch"` and omit `joinUrl` entirely.
 
 ### Join a match
 

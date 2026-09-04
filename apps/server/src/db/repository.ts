@@ -49,16 +49,22 @@ function storedSeat(
       ? "Computer"
       : `Player ${row.seat}`;
   if (row.kind === "bot") {
-    if (hubParticipant?.difficulty === "player") {
+    if (!row.botDifficulty) {
+      throw new Error("A persisted bot seat must have a difficulty.");
+    }
+    if (
+      hubParticipant?.difficulty === "player" ||
+      (hubParticipant && hubParticipant.difficulty !== row.botDifficulty)
+    ) {
       throw new Error(
-        "Persisted hub bot metadata must declare a bot difficulty.",
+        "Persisted hub bot metadata must match its seat difficulty.",
       );
     }
     return {
       seat: row.seat,
       kind: "bot",
       name,
-      difficulty: hubParticipant?.difficulty ?? "hard",
+      difficulty: row.botDifficulty,
       outcome: row.outcome,
     };
   }
@@ -190,7 +196,12 @@ function seatRow(
         playerId,
         seatToken: seat.seatToken,
       }
-    : { matchId, seat: seat.seat, kind: seat.kind };
+    : {
+        matchId,
+        seat: seat.seat,
+        kind: seat.kind,
+        botDifficulty: seat.difficulty,
+      };
 }
 
 /** Complete one locked match and persist ordered seat outcomes atomically. */

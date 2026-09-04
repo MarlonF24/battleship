@@ -59,7 +59,7 @@ PostgreSQL stores:
 
 - namespaced players;
 - matches, source, mode, phase, timestamps, and terminal result;
-- human/bot seats, player references, seat tokens, and outcomes;
+- human/bot seats, player references, seat tokens, bot difficulties, and outcomes;
 - the normalized hub match definition needed for idempotency and result reporting.
 
 It does not store fleets, cells, shots, deadlines, WebSocket connections, spectators, or the aggregate.

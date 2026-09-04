@@ -46,7 +46,7 @@ export class MatchService {
               seat: 2,
               kind: "bot",
               name: "Computer",
-              difficulty: "hard",
+              difficulty: request.difficulty,
             }
           : null,
       ],

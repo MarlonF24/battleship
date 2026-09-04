@@ -81,7 +81,7 @@ After persisting a terminal match and publishing its final browser projection, B
 
 Outcomes are `win`, `loss`, or `premature`. A premature match reports `premature` for both participants. The request includes no bearer token, browser identity, or **Seat Token**. Delivery is attempted once; a rejected response or network failure is logged and not retried. Startup recovery makes the same single attempt for hub matches finalized as `server_restart`.
 
-Bot targeting maps `easy` to uniform random shots, `normal` to bounded probability-density sampling, and `hard` to exhaustive probability-density scoring. Standalone computer games use `hard`.
+Bot targeting maps `easy` to uniform random shots, `normal` to bounded probability-density sampling, and `hard` to exhaustive probability-density scoring. 
 
 ## Hub deployment contract
 

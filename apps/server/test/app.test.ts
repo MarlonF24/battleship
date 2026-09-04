@@ -124,10 +124,17 @@ describe("lifecycle HTTP API", () => {
           standalonePlayerId: firstPlayer,
           mode: "salvo",
           opponent: "bot",
+          difficulty: "easy",
         }),
       }),
     );
     expect(repeatedPlayer.status).toBe(201);
+    const repeatedLinks = await createLinks(repeatedPlayer);
+    const computerMatch = await repository.findMatch(repeatedLinks.matchId);
+    expect(computerMatch?.seats[1]).toMatchObject({
+      kind: "bot",
+      difficulty: "easy",
+    });
     expect(repository.playerCount).toBe(2);
   });
 
@@ -238,6 +245,7 @@ describe("lifecycle HTTP API", () => {
           standalonePlayerId: hubPlayer,
           mode: "singleShot",
           opponent: "bot",
+          difficulty: "hard",
         }),
       }),
     );

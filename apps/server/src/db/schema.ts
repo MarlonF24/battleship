@@ -32,6 +32,11 @@ export const matchPhaseEnum = pgEnum("match_phase", [
   "completed",
 ]);
 export const seatKindEnum = pgEnum("seat_kind", ["human", "bot"]);
+export const botDifficultyEnum = pgEnum("bot_difficulty", [
+  "easy",
+  "normal",
+  "hard",
+]);
 export const outcomeEnum = pgEnum("match_outcome", [
   "win",
   "loss",
@@ -110,6 +115,7 @@ export const matchSeats = pgTable(
     kind: seatKindEnum("kind").notNull(),
     playerId: uuid("player_id").references(() => players.id),
     seatToken: uuid("seat_token"),
+    botDifficulty: botDifficultyEnum("bot_difficulty"),
     outcome: outcomeEnum("outcome"),
   },
   (table) => [
@@ -119,7 +125,7 @@ export const matchSeats = pgTable(
     check("match_seats_number_check", sql`${table.seat} in (1, 2)`),
     check(
       "match_seats_kind_access_check",
-      sql`(${table.kind} = 'human' and ${table.playerId} is not null and ${table.seatToken} is not null) or (${table.kind} = 'bot' and ${table.playerId} is null and ${table.seatToken} is null)`,
+      sql`(${table.kind} = 'human' and ${table.playerId} is not null and ${table.seatToken} is not null and ${table.botDifficulty} is null) or (${table.kind} = 'bot' and ${table.playerId} is null and ${table.seatToken} is null and ${table.botDifficulty} is not null)`,
     ),
   ],
 );

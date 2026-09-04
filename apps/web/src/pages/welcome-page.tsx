@@ -4,7 +4,7 @@ import { useState, type SyntheticEvent } from "react";
 import { useNavigate } from "react-router-dom";
 import { Value } from "@sinclair/typebox/value";
 import { UuidSchema } from "@battleship/contracts";
-import type { GameMode } from "@battleship/game-domain";
+import type { BotDifficulty, GameMode } from "@battleship/game-domain";
 import { AppShell } from "../components/app-shell";
 import { Button, ErrorMessage, Panel, cn } from "../components/ui";
 import { createMatch, localPath, standalonePlayerId } from "../lib/api";
@@ -29,6 +29,15 @@ const modeOptions: readonly Readonly<{
     label: "Streak",
     explanation: "Players fire consecutive shots until they miss.",
   },
+];
+
+const difficultyOptions: readonly Readonly<{
+  value: BotDifficulty;
+  label: string;
+}>[] = [
+  { value: "easy", label: "Easy" },
+  { value: "normal", label: "Normal" },
+  { value: "hard", label: "Hard" },
 ];
 
 function SegmentedControl<T extends string>({
@@ -72,6 +81,7 @@ export function WelcomePage() {
   const navigate = useNavigate();
   const [mode, setMode] = useState<GameMode>("singleShot");
   const [opponent, setOpponent] = useState<"human" | "bot">("human");
+  const [difficulty, setDifficulty] = useState<BotDifficulty>("hard");
   const [matchId, setMatchId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -83,11 +93,12 @@ export function WelcomePage() {
     setBusy(true);
     setError(null);
     try {
-      const response = await createMatch({
-        standalonePlayerId: standalonePlayerId(),
-        mode,
-        opponent,
-      });
+      const common = { standalonePlayerId: standalonePlayerId(), mode };
+      const response = await createMatch(
+        opponent === "bot"
+          ? { ...common, opponent, difficulty }
+          : { ...common, opponent },
+      );
       await navigate(localPath(response.playerUrl));
     } catch (cause) {
       setError(
@@ -139,6 +150,14 @@ export function WelcomePage() {
               ]}
               onChange={setOpponent}
             />
+            {opponent === "bot" && (
+              <SegmentedControl
+                label="Computer Difficulty"
+                value={difficulty}
+                options={difficultyOptions}
+                onChange={setDifficulty}
+              />
+            )}
           </div>
 
           <Button type="submit" disabled={busy}>

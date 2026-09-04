@@ -69,14 +69,24 @@ export const ParticipantDescriptorSchema = Type.Union([
 ]);
 
 /** Standalone match creation input. */
-export const CreateMatchRequestSchema = Type.Object(
-  {
-    standalonePlayerId: UuidSchema,
-    mode: GameModeSchema,
-    opponent: Type.Union([Type.Literal("human"), Type.Literal("bot")]),
-  },
-  strict,
-);
+const StandaloneMatchFields = {
+  standalonePlayerId: UuidSchema,
+  mode: GameModeSchema,
+};
+export const CreateMatchRequestSchema = Type.Union([
+  Type.Object(
+    { ...StandaloneMatchFields, opponent: Type.Literal("human") },
+    strict,
+  ),
+  Type.Object(
+    {
+      ...StandaloneMatchFields,
+      opponent: Type.Literal("bot"),
+      difficulty: BotDifficultySchema,
+    },
+    strict,
+  ),
+]);
 export type CreateMatchRequest = Static<typeof CreateMatchRequestSchema>;
 
 /** Browser identity used to claim the second human seat. */

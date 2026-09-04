@@ -51,6 +51,24 @@ COMMIT;
 
 Fresh databases already receive `seat_token` and must skip that statement.
 
+Databases created before standalone bot difficulty selection must persist the previous fixed `hard` behavior before deploying the corresponding application image:
+
+```sql
+BEGIN;
+CREATE TYPE bot_difficulty AS ENUM ('easy', 'normal', 'hard');
+ALTER TABLE match_seats ADD COLUMN bot_difficulty bot_difficulty;
+UPDATE match_seats SET bot_difficulty = 'hard' WHERE kind = 'bot';
+ALTER TABLE match_seats DROP CONSTRAINT match_seats_kind_access_check;
+ALTER TABLE match_seats ADD CONSTRAINT match_seats_kind_access_check CHECK (
+  (kind = 'human' AND player_id IS NOT NULL AND seat_token IS NOT NULL AND bot_difficulty IS NULL)
+  OR
+  (kind = 'bot' AND player_id IS NULL AND seat_token IS NULL AND bot_difficulty IS NOT NULL)
+);
+COMMIT;
+```
+
+Fresh databases receive the final enum, column, and constraint directly through Drizzle and must skip this statement.
+
 Synchronize the configured database with the current Drizzle schema before server rollout:
 
 ```bash
