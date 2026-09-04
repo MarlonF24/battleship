@@ -1,11 +1,8 @@
 /** Persistence contracts for durable identities, match metadata, and results. */
 
+import type { HubMatchDefinition } from "@battleship/contracts";
 import type {
-  HubCreateMatchRequest,
-  HubSeatDescriptor,
-  WebhookEvent,
-} from "@battleship/contracts";
-import type {
+  BotDifficulty,
   CompletionReason,
   GameMode,
   Seat,
@@ -31,6 +28,7 @@ export type StoredPlayer = Readonly<{
 export type StoredHumanSeat = Readonly<{
   seat: Seat;
   kind: "human";
+  name: string;
   player: StoredPlayer;
   seatToken: string;
   outcome: MatchOutcome | null;
@@ -39,6 +37,8 @@ export type StoredHumanSeat = Readonly<{
 export type StoredBotSeat = Readonly<{
   seat: Seat;
   kind: "bot";
+  name: string;
+  difficulty: BotDifficulty;
   outcome: MatchOutcome | null;
 }>;
 
@@ -63,7 +63,7 @@ export class RepositoryError extends Error {
 export type StoredMatch = Readonly<{
   id: string;
   hubMatchId: string | null;
-  hubRequest: HubCreateMatchRequest | null;
+  hubRequest: HubMatchDefinition | null;
   source: MatchSource;
   mode: GameMode;
   phase: MatchPhase;
@@ -80,15 +80,21 @@ export type CreateStoredSeatInput =
   | Readonly<{
       seat: Seat;
       kind: "human";
+      name: string;
       identity: PlayerIdentity;
       seatToken: string;
     }>
-  | Readonly<{ seat: Seat; kind: "bot" }>;
+  | Readonly<{
+      seat: Seat;
+      kind: "bot";
+      name: string;
+      difficulty: BotDifficulty;
+    }>;
 
 export type CreateStoredMatchInput = Readonly<{
   id: string;
   hubMatchId: string | null;
-  hubRequest: HubCreateMatchRequest | null;
+  hubRequest: HubMatchDefinition | null;
   source: MatchSource;
   mode: GameMode;
   seats: readonly [CreateStoredSeatInput, CreateStoredSeatInput | null];
@@ -100,24 +106,11 @@ export type CompleteStoredMatchInput = Readonly<{
   reason: CompletionReason;
 }>;
 
-export type DueOutboxEvent = Readonly<{
-  eventId: string;
-  payload: WebhookEvent;
-  attemptCount: number;
-}>;
-
 /** Convert persistence metadata into the framework-free participant shape. */
 export function domainDescriptor(seat: StoredSeat): SeatDescriptor {
-  return { kind: seat.kind };
-}
-
-/** Return the external descriptor required by hub status and result payloads. */
-export function hubDescriptor(seat: StoredSeat): HubSeatDescriptor {
-  if (seat.kind === "bot") return { kind: "bot" };
-  if (seat.player.identity.source !== "hub") {
-    throw new Error("Hub matches must reference hub-scoped human identities.");
-  }
-  return { kind: "human", playerId: seat.player.identity.externalId };
+  return seat.kind === "bot"
+    ? { kind: "bot", difficulty: seat.difficulty }
+    : { kind: "human" };
 }
 
 /** Durable operations required by session and lifecycle orchestration. */
@@ -135,14 +128,6 @@ export type MatchRepository = Readonly<{
   touchMatch: (matchId: string) => Promise<void>;
   completeMatch: (input: CompleteStoredMatchInput) => Promise<StoredMatch>;
   abortNonterminalMatches: () => Promise<readonly StoredMatch[]>;
-  dueOutboxEvents: (now: Date) => Promise<readonly DueOutboxEvent[]>;
-  markOutboxDelivered: (eventId: string, deliveredAt: Date) => Promise<void>;
-  markOutboxFailed: (
-    eventId: string,
-    attemptCount: number,
-    nextAttemptAt: Date,
-    error: string,
-  ) => Promise<void>;
   close: () => Promise<void>;
 }>;
 
@@ -152,42 +137,4 @@ export function terminalOutcomes(
 ): readonly [MatchOutcome, MatchOutcome] {
   if (winnerSeat === null) return ["premature", "premature"];
   return winnerSeat === 1 ? ["win", "loss"] : ["loss", "win"];
-}
-
-/**
- * Create the stable outbox payload for a completed hub match.
- *
- * @returns `null` for standalone/incomplete metadata because only the hub owns
- * external ratings and therefore receives completion callbacks.
- */
-export function createWebhookEvent(
-  match: StoredMatch,
-  reason: CompletionReason,
-  winnerSeat: Seat | null,
-  completedAt: Date,
-): WebhookEvent | null {
-  if (!match.hubMatchId || !match.seats[1]) return null;
-
-  const outcomes = terminalOutcomes(winnerSeat);
-  return {
-    eventId: crypto.randomUUID(),
-    type: "battleship.match.completed",
-    hubMatchId: match.hubMatchId,
-    matchId: match.id,
-    mode: match.mode,
-    completedAt: completedAt.toISOString(),
-    terminalReason: reason,
-    seats: [
-      {
-        seat: 1,
-        descriptor: hubDescriptor(match.seats[0]),
-        outcome: outcomes[0],
-      },
-      {
-        seat: 2,
-        descriptor: hubDescriptor(match.seats[1]),
-        outcome: outcomes[1],
-      },
-    ],
-  };
 }

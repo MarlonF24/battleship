@@ -1,14 +1,12 @@
-/** PostgreSQL implementation of identities, match metadata, and result delivery. */
+/** PostgreSQL implementation of identities and durable match metadata. */
 
-import { and, asc, eq, inArray, isNull, lte, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import {
-  createWebhookEvent,
   terminalOutcomes,
   type CreateStoredSeatInput,
   type CompleteStoredMatchInput,
-  type DueOutboxEvent,
   type MatchRepository,
   type PlayerIdentity,
   RepositoryError,
@@ -16,12 +14,12 @@ import {
   type StoredPlayer,
   type StoredSeat,
 } from "../repository";
-import { matches, matchSeats, players, resultOutbox } from "./schema";
+import { matches, matchSeats, players } from "./schema";
 
 type Database = ReturnType<typeof drizzle>;
 type ReadDatabase = Pick<Database, "select">;
 type IdentityDatabase = Pick<Database, "insert" | "select">;
-type PersistenceDatabase = Pick<Database, "insert" | "select" | "update">;
+type PersistenceDatabase = Pick<Database, "select" | "update">;
 type MatchRow = typeof matches.$inferSelect;
 type PlayerRow = typeof players.$inferSelect;
 type SeatRow = typeof matchSeats.$inferSelect;
@@ -36,12 +34,38 @@ function storedPlayer(row: PlayerRow): StoredPlayer {
 function storedSeat(
   row: SeatRow,
   playersById: ReadonlyMap<string, PlayerRow>,
+  match: MatchRow,
 ): StoredSeat {
   if (row.seat !== 1 && row.seat !== 2) {
     throw new Error("Persisted match seats must be 1 or 2.");
   }
+  const hubParticipant = match.hubRequest?.participants[row.seat - 1];
+  if (match.source === "hub" && !hubParticipant) {
+    throw new Error("A persisted hub seat must have participant metadata.");
+  }
+  const name = hubParticipant
+    ? hubParticipant.name
+    : row.kind === "bot"
+      ? "Computer"
+      : `Player ${row.seat}`;
   if (row.kind === "bot") {
-    return { seat: row.seat, kind: "bot", outcome: row.outcome };
+    if (hubParticipant?.difficulty === "player") {
+      throw new Error(
+        "Persisted hub bot metadata must declare a bot difficulty.",
+      );
+    }
+    return {
+      seat: row.seat,
+      kind: "bot",
+      name,
+      difficulty: hubParticipant?.difficulty ?? "hard",
+      outcome: row.outcome,
+    };
+  }
+  if (hubParticipant && hubParticipant.difficulty !== "player") {
+    throw new Error(
+      "Persisted hub human metadata must declare player difficulty.",
+    );
   }
   const player = row.playerId ? playersById.get(row.playerId) : undefined;
   if (!player || !row.seatToken) {
@@ -52,6 +76,7 @@ function storedSeat(
   return {
     seat: row.seat,
     kind: "human",
+    name,
     player: storedPlayer(player),
     seatToken: row.seatToken,
     outcome: row.outcome,
@@ -82,8 +107,8 @@ function combineMatch(
     mode: row.mode,
     phase: row.phase,
     seats: [
-      storedSeat(first, playersById),
-      second ? storedSeat(second, playersById) : null,
+      storedSeat(first, playersById, row),
+      second ? storedSeat(second, playersById, row) : null,
     ],
     winnerSeat:
       row.winnerSeat === 1 || row.winnerSeat === 2 ? row.winnerSeat : null,
@@ -168,7 +193,7 @@ function seatRow(
     : { matchId, seat: seat.seat, kind: seat.kind };
 }
 
-/** Complete one locked match and create its optional hub event atomically. */
+/** Complete one locked match and persist ordered seat outcomes atomically. */
 async function completeStoredMatch(
   database: PersistenceDatabase,
   input: CompleteStoredMatchInput,
@@ -201,21 +226,6 @@ async function completeStoredMatch(
         ),
     ),
   );
-
-  // Persist the integration event in the same transaction as terminal state.
-  const event = createWebhookEvent(
-    existing,
-    input.reason,
-    input.winnerSeat,
-    completedAt,
-  );
-  if (event) {
-    await database.insert(resultOutbox).values({
-      eventId: event.eventId,
-      matchId: input.matchId,
-      payload: event,
-    });
-  }
 }
 
 /** Create the Drizzle repository and its underlying postgres.js connection. */
@@ -390,38 +400,6 @@ export function createPostgresRepository(databaseUrl: string): MatchRepository {
           return match;
         }),
       );
-    },
-
-    async dueOutboxEvents(now) {
-      const rows = await database
-        .select()
-        .from(resultOutbox)
-        .where(
-          and(
-            isNull(resultOutbox.deliveredAt),
-            lte(resultOutbox.nextAttemptAt, now),
-          ),
-        )
-        .orderBy(asc(resultOutbox.nextAttemptAt));
-      return rows.map(({ eventId, payload, attemptCount }): DueOutboxEvent => ({
-        eventId,
-        payload,
-        attemptCount,
-      }));
-    },
-
-    async markOutboxDelivered(eventId, deliveredAt) {
-      await database
-        .update(resultOutbox)
-        .set({ deliveredAt, lastError: null })
-        .where(eq(resultOutbox.eventId, eventId));
-    },
-
-    async markOutboxFailed(eventId, attemptCount, nextAttemptAt, error) {
-      await database
-        .update(resultOutbox)
-        .set({ attemptCount, nextAttemptAt, lastError: error })
-        .where(eq(resultOutbox.eventId, eventId));
     },
 
     async close() {

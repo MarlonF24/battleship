@@ -24,7 +24,7 @@ type RegistryOptions = Readonly<{
   clock?: Clock;
   scheduler?: Scheduler;
   random?: RandomSource;
-  onMatchCompleted?: () => void;
+  onMatchCompleted?: (match: StoredMatch) => void;
 }>;
 
 /**
@@ -40,7 +40,7 @@ export class MatchSessionRegistry {
   private readonly clock: Clock;
   private readonly scheduler: Scheduler;
   private readonly random: RandomSource | undefined;
-  private readonly onMatchCompleted: () => void;
+  private readonly onMatchCompleted: (match: StoredMatch) => void;
   private cleanupHandle: ScheduledHandle | null = null;
 
   public constructor(options: RegistryOptions) {
@@ -69,9 +69,9 @@ export class MatchSessionRegistry {
       clock: this.clock,
       scheduler: this.scheduler,
       ...(this.random ? { random: this.random } : {}),
-      onCompleted: (matchId) => {
-        this.sessions.delete(matchId);
-        this.onMatchCompleted();
+      onCompleted: (completedMatch) => {
+        this.sessions.delete(completedMatch.id);
+        this.onMatchCompleted(completedMatch);
       },
     });
     this.sessions.set(match.id, session);

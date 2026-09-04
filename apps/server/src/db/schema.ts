@@ -1,4 +1,4 @@
-/** Drizzle schema for durable match metadata, results, and webhook delivery. */
+/** Drizzle schema for durable identities, match metadata, and results. */
 
 import { sql } from "drizzle-orm";
 import {
@@ -9,15 +9,11 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
-  text,
   timestamp,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
-import type {
-  HubCreateMatchRequest,
-  WebhookEvent,
-} from "@battleship/contracts";
+import type { HubMatchDefinition } from "@battleship/contracts";
 
 /** Database enums mirror stable persisted lifecycle values, not wire schemas. */
 export const matchSourceEnum = pgEnum("match_source", ["standalone", "hub"]);
@@ -74,7 +70,7 @@ export const matches = pgTable(
   {
     id: uuid("id").primaryKey(),
     hubMatchId: uuid("hub_match_id"),
-    hubRequest: jsonb("hub_request").$type<HubCreateMatchRequest>(),
+    hubRequest: jsonb("hub_request").$type<HubMatchDefinition>(),
     source: matchSourceEnum("source").notNull(),
     mode: matchModeEnum("mode").notNull(),
     phase: matchPhaseEnum("phase").notNull().default("placement"),
@@ -95,6 +91,10 @@ export const matches = pgTable(
     check(
       "matches_winner_seat_check",
       sql`${table.winnerSeat} is null or ${table.winnerSeat} in (1, 2)`,
+    ),
+    check(
+      "matches_source_hub_metadata_check",
+      sql`(${table.source} = 'hub' and ${table.hubMatchId} is not null and ${table.hubRequest} is not null) or (${table.source} = 'standalone' and ${table.hubMatchId} is null and ${table.hubRequest} is null)`,
     ),
   ],
 );
@@ -121,26 +121,5 @@ export const matchSeats = pgTable(
       "match_seats_kind_access_check",
       sql`(${table.kind} = 'human' and ${table.playerId} is not null and ${table.seatToken} is not null) or (${table.kind} = 'bot' and ${table.playerId} is null and ${table.seatToken} is null)`,
     ),
-  ],
-);
-
-/** Transactional queue that makes hub result delivery restart-safe. */
-export const resultOutbox = pgTable(
-  "result_outbox",
-  {
-    eventId: uuid("event_id").primaryKey(),
-    matchId: uuid("match_id")
-      .notNull()
-      .references(() => matches.id, { onDelete: "cascade" }),
-    payload: jsonb("payload").$type<WebhookEvent>().notNull(),
-    attemptCount: integer("attempt_count").notNull().default(0),
-    nextAttemptAt: timestamp("next_attempt_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    deliveredAt: timestamp("delivered_at", { withTimezone: true }),
-    lastError: text("last_error"),
-  },
-  (table) => [
-    index("result_outbox_due_idx").on(table.deliveredAt, table.nextAttemptAt),
   ],
 );

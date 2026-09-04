@@ -1,9 +1,17 @@
 /** Probability-density targeting that consumes public board evidence only. */
 
-import { chooseRandom, type RandomSource } from "./random";
-import { coordinateKey, type Coordinate, type ShipPlacement } from "./types";
+import { chooseRandom, shuffled, type RandomSource } from "./random";
+import {
+  coordinateKey,
+  type BotDifficulty,
+  type Coordinate,
+  type ShipPlacement,
+} from "./types";
 import { placementCoordinates } from "./fleet";
 import type { OpponentKnowledge } from "./board";
+
+/** Candidate cap that gives the normal agent a deliberately noisy heatmap. */
+const NORMAL_CANDIDATES_PER_SHIP = 32;
 
 function cellAt(
   knowledge: OpponentKnowledge,
@@ -124,13 +132,14 @@ function enumerateCandidates(
 export function chooseProbabilityTarget(
   knowledge: OpponentKnowledge,
   random: RandomSource,
+  candidatesPerShip?: number,
 ): Coordinate {
   const clusters = unresolvedHitClusters(knowledge);
   const scores = new Map<string, { coordinate: Coordinate; score: number }>();
 
   for (const length of knowledge.remainingShipLengths) {
     const candidates = enumerateCandidates(knowledge, length);
-    const targetedCandidates =
+    const compatibleCandidates =
       clusters.length === 0
         ? candidates
         : candidates.filter((candidate) => {
@@ -143,6 +152,9 @@ export function chooseProbabilityTarget(
               ),
             );
           });
+    const targetedCandidates = candidatesPerShip
+      ? shuffled(compatibleCandidates, random).slice(0, candidatesPerShip)
+      : compatibleCandidates;
 
     // Score only unresolved cells because known hits are evidence, not targets.
     for (const candidate of targetedCandidates) {
@@ -169,6 +181,14 @@ export function chooseProbabilityTarget(
   }
 
   // This fallback keeps the agent operational if supplied evidence is inconsistent.
+  return chooseUniformTarget(knowledge, random);
+}
+
+/** Choose uniformly from cells that are still legal under public evidence. */
+function chooseUniformTarget(
+  knowledge: OpponentKnowledge,
+  random: RandomSource,
+): Coordinate {
   const legal: Coordinate[] = [];
   for (let row = 0; row < knowledge.rows; row += 1) {
     for (let column = 0; column < knowledge.columns; column += 1) {
@@ -177,9 +197,23 @@ export function chooseProbabilityTarget(
       }
     }
   }
-  const fallback = chooseRandom(legal, random);
-  if (!fallback) {
-    throw new Error("The probability agent has no legal target.");
+  const selected = chooseRandom(legal, random);
+  if (!selected) {
+    throw new Error("The agent has no legal target.");
   }
-  return fallback;
+  return selected;
+}
+
+/** Select a legal target using the strategy declared for one bot seat. */
+export function chooseBotTarget(
+  knowledge: OpponentKnowledge,
+  difficulty: BotDifficulty,
+  random: RandomSource,
+): Coordinate {
+  if (difficulty === "easy") return chooseUniformTarget(knowledge, random);
+  return chooseProbabilityTarget(
+    knowledge,
+    random,
+    difficulty === "normal" ? NORMAL_CANDIDATES_PER_SHIP : undefined,
+  );
 }

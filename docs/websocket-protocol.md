@@ -108,7 +108,7 @@ Every accepted command, automatic action, connection transition, or phase transi
 
 - `revision` and `serverTimeMs`;
 - `matchId`, mode, and rules;
-- ordered participant kinds, readiness, and connectivity;
+- ordered participant display names, kinds, readiness, and connectivity;
 - viewer role.
 
 Placement adds `placementDeadlineMs`. Opponent fleets are never included.

@@ -59,12 +59,7 @@ export function createApp({
             title: "Battleship API",
             version: "1.0.0",
             description:
-              "Standalone match lifecycle, provisional hub integration, and live WebSocket contracts.",
-          },
-          components: {
-            securitySchemes: {
-              hubBearer: { type: "http", scheme: "bearer" },
-            },
+              "Standalone lifecycle, persistent game-hub match creation, and live WebSocket contracts.",
           },
         },
       }),

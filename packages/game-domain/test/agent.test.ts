@@ -3,6 +3,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   BattleBoard,
+  chooseBotTarget,
   chooseProbabilityTarget,
   generateRandomFleet,
 } from "../src";
@@ -34,5 +35,16 @@ describe("probability-density agent", () => {
     expect(chooseProbabilityTarget(first, seededRandom(32))).toEqual(
       chooseProbabilityTarget(second, seededRandom(32)),
     );
+  });
+
+  test("every difficulty selects only an unknown public target", () => {
+    const fleet = generateRandomFleet(seededRandom(40));
+    if (!fleet.ok) throw new Error("Test fleet must be generated.");
+    const knowledge = new BattleBoard(fleet.value).opponentKnowledge();
+
+    for (const difficulty of ["easy", "normal", "hard"] as const) {
+      const target = chooseBotTarget(knowledge, difficulty, seededRandom(41));
+      expect(knowledge.cells[target.row]?.[target.column]).toBe("unknown");
+    }
   });
 });

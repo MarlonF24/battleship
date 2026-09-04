@@ -2,7 +2,7 @@
 
 import type {
   CreateMatchRequest,
-  HubCreateMatchRequest,
+  HubMatchDefinition,
   JoinMatchRequest,
 } from "@battleship/contracts";
 import type { MatchRepository, StoredMatch } from "./repository";
@@ -34,13 +34,21 @@ export class MatchService {
         {
           seat: 1,
           kind: "human",
+          name: "Player 1",
           identity: {
             source: "standalone",
             externalId: request.standalonePlayerId,
           },
           seatToken: crypto.randomUUID(),
         },
-        request.opponent === "bot" ? { seat: 2, kind: "bot" } : null,
+        request.opponent === "bot"
+          ? {
+              seat: 2,
+              kind: "bot",
+              name: "Computer",
+              difficulty: "hard",
+            }
+          : null,
       ],
     });
     this.registry.create(match);
@@ -53,27 +61,36 @@ export class MatchService {
    * Seat-token generation happens here so neither controller nor domain needs
    * to understand how durable identity differs from seat authorization.
    */
-  public async createHub(request: HubCreateMatchRequest): Promise<StoredMatch> {
+  public async createHub(request: HubMatchDefinition): Promise<StoredMatch> {
     const seatInput = (
       seat: 1 | 2,
-      descriptor: HubCreateMatchRequest["seats"][number],
+      participant: HubMatchDefinition["participants"][number],
     ) =>
-      descriptor.kind === "bot"
-        ? ({ seat, kind: "bot" } as const)
-        : ({
+      participant.difficulty === "player"
+        ? ({
             seat,
             kind: "human",
-            identity: { source: "hub", externalId: descriptor.playerId },
+            name: participant.name,
+            identity: { source: "hub", externalId: participant.playerId },
             seatToken: crypto.randomUUID(),
+          } as const)
+        : ({
+            seat,
+            kind: "bot",
+            name: participant.name,
+            difficulty: participant.difficulty,
           } as const);
 
     const match = await this.repository.createMatch({
       id: crypto.randomUUID(),
-      hubMatchId: request.hubMatchId,
+      hubMatchId: request.roomUuid,
       hubRequest: request,
       source: "hub",
       mode: request.mode,
-      seats: [seatInput(1, request.seats[0]), seatInput(2, request.seats[1])],
+      seats: [
+        seatInput(1, request.participants[0]),
+        seatInput(2, request.participants[1]),
+      ],
     });
     this.registry.create(match);
     return match;

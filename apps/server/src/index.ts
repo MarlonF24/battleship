@@ -5,10 +5,10 @@ import { createApp } from "./app";
 import { getConfig, type ServerConfig } from "./config";
 import { createPostgresRepository } from "./db/repository";
 import { createLogger } from "./logger";
+import { HubResultReporter } from "./result-reporter";
 import type { StoredMatch } from "./repository";
 import { createSpaRoutes } from "./routes/spa";
 import { MatchSessionRegistry } from "./session/registry";
-import { ResultWebhookWorker } from "./webhook";
 
 const SHUTDOWN_DRAIN_MS = 5_000;
 
@@ -22,6 +22,7 @@ try {
 }
 const logger = createLogger(config.logLevel);
 const repository = createPostgresRepository(config.databaseUrl);
+const resultReporter = new HubResultReporter(config.hub, logger);
 
 logger.info(
   {
@@ -33,6 +34,8 @@ logger.info(
     databaseSsl: config.dbSsl,
     corsOriginCount: config.corsOrigins.length,
     hubEnabled: config.hub.enabled,
+    hubBaseUrl: config.hub.enabled ? config.hub.hubBaseUrl : undefined,
+    publicBaseUrl: config.hub.enabled ? config.hub.publicBaseUrl : undefined,
   },
   "Server configuration loaded",
 );
@@ -63,15 +66,10 @@ if (aborted.length > 0) {
   );
 }
 
-const resultWebhookWorker = new ResultWebhookWorker({
-  repository,
-  logger,
-  hub: config.hub,
-});
 const registry = new MatchSessionRegistry({
   repository,
   logger,
-  onMatchCompleted: () => resultWebhookWorker.wake(),
+  onMatchCompleted: (match) => void resultReporter.report(match),
 });
 const baseApp = createApp({ config, repository, registry, logger });
 
@@ -85,7 +83,7 @@ const app =
 
 app.listen({ hostname: "0.0.0.0", port: config.serverPort });
 registry.startCleanup();
-resultWebhookWorker.start();
+for (const match of aborted) void resultReporter.report(match);
 logger.info(
   { hostname: "0.0.0.0", port: config.serverPort },
   "Battleship server listening",
@@ -96,11 +94,10 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   logger.info({ signal }, "Graceful shutdown started");
-  await app.stop(false);
   registry.shutdown();
-  resultWebhookWorker.stop();
+  await app.stop(true);
 
-  // Bound the drain so orchestration does not hang on an external callback.
+  // Bound database shutdown so orchestration cannot hang indefinitely.
   await Promise.race([
     repository.close(),
     new Promise<void>((resolveDrain) => {

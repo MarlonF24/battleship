@@ -4,6 +4,10 @@
 export const GAME_MODES = ["singleShot", "salvo", "streak"] as const;
 export type GameMode = (typeof GAME_MODES)[number];
 
+/** Hub-selectable strengths for computer-controlled seats. */
+export const BOT_DIFFICULTIES = ["easy", "normal", "hard"] as const;
+export type BotDifficulty = (typeof BOT_DIFFICULTIES)[number];
+
 /** Orientations valid for every straight ship placement. */
 export const ORIENTATIONS = ["horizontal", "vertical"] as const;
 export type Orientation = (typeof ORIENTATIONS)[number];
@@ -30,6 +34,7 @@ export type HumanSeatDescriptor = Readonly<{
 
 export type BotSeatDescriptor = Readonly<{
   kind: "bot";
+  difficulty: BotDifficulty;
 }>;
 
 export type OpenSeatDescriptor = Readonly<{

@@ -7,11 +7,12 @@ import {
   HubCreateMatchResponseSchema,
   JoinMatchResponseSchema,
   type CreateMatchResponse,
-  type HubCreateMatchResponse,
+  type HubCreateMatchWireResponse,
   type JoinMatchResponse,
 } from "@battleship/contracts";
 import { createApp } from "../src/app";
 import type { AppConfig } from "../src/config";
+import { decodeHubMatchRequest } from "../src/hub-protocol";
 import { MatchSessionRegistry } from "../src/session/registry";
 import { MemoryMatchRepository } from "../src/testing/memory-repository";
 import { silentLogger } from "./helpers";
@@ -20,8 +21,8 @@ const config: AppConfig = Object.freeze({
   corsOrigins: [],
   hub: {
     enabled: true as const,
-    sharedToken: "test-token",
-    resultWebhookUrl: "https://hub.example/results",
+    hubBaseUrl: "https://hub.example",
+    publicBaseUrl: "https://battleship.example",
   },
 });
 
@@ -58,7 +59,9 @@ async function joinLinks(response: Response): Promise<JoinMatchResponse> {
   return body;
 }
 
-async function hubLinks(response: Response): Promise<HubCreateMatchResponse> {
+async function hubLinks(
+  response: Response,
+): Promise<HubCreateMatchWireResponse & Record<string, unknown>> {
   const body: unknown = await response.json();
   if (!Value.Check(HubCreateMatchResponseSchema, body)) {
     throw new Error("Expected a valid hub match response.");
@@ -156,40 +159,16 @@ describe("lifecycle HTTP API", () => {
     );
   });
 
-  test("enforces hub authentication and request idempotency", async () => {
+  test("creates UUID-keyed hub matches idempotently with absolute links", async () => {
     const { app, repository } = testApp();
     const hubPlayer = "11111111-1111-4111-8111-111111111111";
+    const hubBot = "22222222-2222-4222-8222-222222222222";
     const request = {
-      hubMatchId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
-      mode: "streak",
-      seats: [
-        {
-          kind: "human",
-          playerId: hubPlayer,
-        },
-        { kind: "bot" },
-      ],
+      room_uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      [hubPlayer]: { name: "Alice", difficulty: "player" },
+      [hubBot]: { name: "Admiral Bot", difficulty: "normal" },
+      config: {},
     };
-    const unauthorized = await app.handle(
-      new Request("http://localhost/api/v1/hub/matches", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(request),
-      }),
-    );
-    expect(unauthorized.status).toBe(401);
-
-    const wrongToken = await app.handle(
-      new Request("http://localhost/api/v1/hub/matches", {
-        method: "POST",
-        headers: {
-          authorization: "Bearer wrong-token",
-          "content-type": "application/json",
-        },
-        body: JSON.stringify(request),
-      }),
-    );
-    expect(wrongToken.status).toBe(401);
 
     const { app: disabledApp } = testApp({
       corsOrigins: [],
@@ -208,30 +187,47 @@ describe("lifecycle HTTP API", () => {
       app.handle(
         new Request("http://localhost/api/v1/hub/matches", {
           method: "POST",
-          headers: {
-            authorization: "Bearer test-token",
-            "content-type": "application/json",
-          },
+          headers: { "content-type": "application/json" },
           body: JSON.stringify(request),
         }),
       );
     const created = await send();
     const repeated = await send();
-    expect(created.status).toBe(201);
+    expect(created.status).toBe(200);
     expect(repeated.status).toBe(200);
     const createdLinks = await hubLinks(created);
     const repeatedLinks = await hubLinks(repeated);
-    expect(repeatedLinks.matchId).toBe(createdLinks.matchId);
-    expect(repeatedLinks.seats).toEqual(createdLinks.seats);
-    const statusResponse = await app.handle(
-      new Request(`http://localhost${createdLinks.resultUrl}`, {
-        headers: { authorization: "Bearer test-token" },
+    expect(repeatedLinks).toEqual(createdLinks);
+    expect(createdLinks.room_uuid).toBe(request.room_uuid);
+    expect(createdLinks.config.spectator_link).toStartWith(
+      "https://battleship.example/spectate/",
+    );
+    expect(createdLinks[hubPlayer]).toEqual({
+      controller_link: expect.stringContaining(
+        "https://battleship.example/matches/",
+      ),
+    });
+    expect(createdLinks[hubBot]).toEqual({ controller_link: "" });
+    const stored = await repository.findHubMatch(request.room_uuid);
+    expect(stored?.mode).toBe("singleShot");
+    expect(stored?.seats[0]).toMatchObject({ name: "Alice", kind: "human" });
+    expect(stored?.seats[1]).toMatchObject({
+      name: "Admiral Bot",
+      kind: "bot",
+      difficulty: "normal",
+    });
+
+    const conflict = await app.handle(
+      new Request("http://localhost/api/v1/hub/matches", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          ...request,
+          config: { mode: "streak" },
+        }),
       }),
     );
-    expect(statusResponse.status).toBe(200);
-    expect(JSON.stringify(await statusResponse.json())).not.toContain(
-      "/player/",
-    );
+    expect(conflict.status).toBe(409);
 
     // Equal UUID text remains distinct across hub and standalone namespaces.
     const standalone = await app.handle(
@@ -249,7 +245,34 @@ describe("lifecycle HTTP API", () => {
     expect(repository.playerCount).toBe(2);
   });
 
-  test("documents bearer authentication only on hub operations", async () => {
+  test("rejects invalid hub participant topology at the transport boundary", () => {
+    const participant = { name: "Bot", difficulty: "easy" };
+    expect(
+      decodeHubMatchRequest({
+        room_uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "not-a-uuid": participant,
+        "22222222-2222-4222-8222-222222222222": participant,
+        config: {},
+      }),
+    ).toMatchObject({ ok: false, error: { code: "invalid_request" } });
+    expect(
+      decodeHubMatchRequest({
+        room_uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "11111111-1111-4111-8111-111111111111": participant,
+        config: {},
+      }),
+    ).toMatchObject({ ok: false, error: { code: "participant_count" } });
+    expect(
+      decodeHubMatchRequest({
+        room_uuid: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "11111111-1111-4111-8111-111111111111": participant,
+        "22222222-2222-4222-8222-222222222222": participant,
+        config: {},
+      }),
+    ).toMatchObject({ ok: false, error: { code: "human_required" } });
+  });
+
+  test("documents the public hub creation route without obsolete security", async () => {
     const { app } = testApp();
     const response = await app.handle(
       new Request("http://localhost/openapi/json"),
@@ -262,13 +285,10 @@ describe("lifecycle HTTP API", () => {
       >;
     };
 
-    expect(document.components?.securitySchemes?.hubBearer).toEqual({
-      type: "http",
-      scheme: "bearer",
-    });
-    expect(document.paths?.["/api/v1/hub/matches"]?.post?.security).toEqual([
-      { hubBearer: [] },
-    ]);
+    expect(document.components?.securitySchemes?.hubBearer).toBeUndefined();
+    expect(
+      document.paths?.["/api/v1/hub/matches"]?.post?.security,
+    ).toBeUndefined();
     expect(document.paths?.["/api/v1/matches"]?.post?.security).toBeUndefined();
   });
 });

@@ -36,8 +36,8 @@ const DatabaseSettings = Settings(databaseProperties, { databaseUrl });
 type ComputedInput = {
   corsAllowedOrigins: string;
   hubEnabled: boolean;
-  hubSharedToken: string;
-  hubResultWebhookUrl: string;
+  hubBaseUrl: string;
+  publicBaseUrl: string;
 };
 
 /** Hub settings whose disabled variant cannot carry partial credentials. */
@@ -45,8 +45,8 @@ export type HubConfig =
   | Readonly<{ enabled: false }>
   | Readonly<{
       enabled: true;
-      sharedToken: string;
-      resultWebhookUrl: string;
+      hubBaseUrl: string;
+      publicBaseUrl: string;
     }>;
 
 const AppSettings = Settings(
@@ -69,8 +69,11 @@ const AppSettings = Settings(
       Settings.Literal("production"),
     ]),
     hubEnabled: Settings.Boolean(),
-    hubSharedToken: Settings.String(),
-    hubResultWebhookUrl: Settings.Union([
+    hubBaseUrl: Settings.Union([
+      Settings.Literal(""),
+      Settings.String({ pattern: HTTP_URL_PATTERN }),
+    ]),
+    publicBaseUrl: Settings.Union([
       Settings.Literal(""),
       Settings.String({ pattern: HTTP_URL_PATTERN }),
     ]),
@@ -105,29 +108,39 @@ const AppSettings = Settings(
       }
       return Object.freeze(origins);
     },
-    // The discriminated result makes missing credentials unrepresentable after
-    // startup and removes nullable checks from authorization and delivery.
+    // The discriminated result makes partial hub URL configuration
+    // unrepresentable after startup.
     hub: (config: ComputedInput): HubConfig => {
-      const hasToken = Boolean(config.hubSharedToken);
-      const hasWebhookUrl = Boolean(config.hubResultWebhookUrl);
-      if (hasToken !== hasWebhookUrl || config.hubEnabled !== hasToken) {
+      const hasHubUrl = Boolean(config.hubBaseUrl);
+      const hasPublicUrl = Boolean(config.publicBaseUrl);
+      if (hasHubUrl !== hasPublicUrl || config.hubEnabled !== hasHubUrl) {
         throw new Error(
-          "Hub configuration requires both credentials when enabled and neither when disabled.",
+          "Hub configuration requires both base URLs when enabled and neither when disabled.",
         );
       }
-      if (config.hubEnabled) {
-        const webhookUrl = new URL(config.hubResultWebhookUrl);
-        if (!["http:", "https:"].includes(webhookUrl.protocol)) {
-          throw new Error("HUB_RESULT_WEBHOOK_URL must be an HTTP(S) URL.");
-        }
+      if (!config.hubEnabled) return { enabled: false };
+
+      // Origins deliberately exclude paths so protocol routes and browser
+      // links resolve identically in every deployment.
+      const hubBaseUrl = new URL(config.hubBaseUrl);
+      const publicBaseUrl = new URL(config.publicBaseUrl);
+      if (
+        [hubBaseUrl, publicBaseUrl].some(
+          (url) =>
+            !["http:", "https:"].includes(url.protocol) ||
+            url.pathname !== "/" ||
+            Boolean(url.search || url.hash),
+        )
+      ) {
+        throw new Error(
+          "HUB_BASE_URL and PUBLIC_BASE_URL must be HTTP(S) origins without paths, queries, or fragments.",
+        );
       }
-      return config.hubEnabled
-        ? {
-            enabled: true as const,
-            sharedToken: config.hubSharedToken,
-            resultWebhookUrl: config.hubResultWebhookUrl,
-          }
-        : { enabled: false as const };
+      return {
+        enabled: true,
+        hubBaseUrl: hubBaseUrl.origin,
+        publicBaseUrl: publicBaseUrl.origin,
+      };
     },
   },
 );

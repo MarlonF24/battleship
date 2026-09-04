@@ -1,7 +1,6 @@
 /** Deterministic repository adapter for server tests without PostgreSQL. */
 
 import {
-  createWebhookEvent,
   RepositoryError,
   terminalOutcomes,
   type CreateStoredSeatInput,
@@ -20,16 +19,6 @@ function identityKey(identity: PlayerIdentity): string {
 export class MemoryMatchRepository implements MatchRepository {
   private readonly matches = new Map<string, StoredMatch>();
   private readonly players = new Map<string, StoredPlayer>();
-  private readonly outbox = new Map<
-    string,
-    {
-      payload: NonNullable<ReturnType<typeof createWebhookEvent>>;
-      attemptCount: number;
-      nextAttemptAt: Date;
-      deliveredAt: Date | null;
-      lastError: string | null;
-    }
-  >();
 
   public get playerCount(): number {
     return this.players.size;
@@ -112,6 +101,7 @@ export class MemoryMatchRepository implements MatchRepository {
     const second = this.resolveSeat({
       seat: 2,
       kind: "human",
+      name: "Player 2",
       identity,
       seatToken,
     });
@@ -160,21 +150,6 @@ export class MemoryMatchRepository implements MatchRepository {
     };
     this.matches.set(input.matchId, completed);
 
-    const event = createWebhookEvent(
-      match,
-      input.reason,
-      input.winnerSeat,
-      completedAt,
-    );
-    if (event) {
-      this.outbox.set(event.eventId, {
-        payload: event,
-        attemptCount: 0,
-        nextAttemptAt: completedAt,
-        deliveredAt: null,
-        lastError: null,
-      });
-    }
     return Promise.resolve(completed);
   }
 
@@ -194,53 +169,19 @@ export class MemoryMatchRepository implements MatchRepository {
     return aborted;
   }
 
-  public dueOutboxEvents(now: Date) {
-    return Promise.resolve(
-      [...this.outbox.entries()]
-        .filter(
-          ([, event]) =>
-            !event.deliveredAt &&
-            event.nextAttemptAt.getTime() <= now.getTime(),
-        )
-        .map(([eventId, event]) => ({
-          eventId,
-          payload: event.payload,
-          attemptCount: event.attemptCount,
-        })),
-    );
-  }
-
-  public markOutboxDelivered(
-    eventId: string,
-    deliveredAt: Date,
-  ): Promise<void> {
-    const event = this.outbox.get(eventId);
-    if (event) event.deliveredAt = deliveredAt;
-    return Promise.resolve();
-  }
-
-  public markOutboxFailed(
-    eventId: string,
-    attemptCount: number,
-    nextAttemptAt: Date,
-    error: string,
-  ): Promise<void> {
-    const event = this.outbox.get(eventId);
-    if (event) {
-      event.attemptCount = attemptCount;
-      event.nextAttemptAt = nextAttemptAt;
-      event.lastError = error;
-    }
-    return Promise.resolve();
-  }
-
   public close(): Promise<void> {
     return Promise.resolve();
   }
 
   private resolveSeat(input: CreateStoredSeatInput): StoredSeat {
     if (input.kind === "bot") {
-      return { seat: input.seat, kind: "bot", outcome: null };
+      return {
+        seat: input.seat,
+        kind: "bot",
+        name: input.name,
+        difficulty: input.difficulty,
+        outcome: null,
+      };
     }
     const key = identityKey(input.identity);
     let player = this.players.get(key);
@@ -254,6 +195,7 @@ export class MemoryMatchRepository implements MatchRepository {
     return {
       seat: input.seat,
       kind: "human",
+      name: input.name,
       player,
       seatToken: input.seatToken,
       outcome: null,

@@ -22,7 +22,7 @@
 | Live privacy filtering                          | Server projection builders                    |
 | Rendered live state                             | Browser `MatchSessionStore` latest projection |
 | Identity, participants, terminal metadata       | PostgreSQL through Drizzle                    |
-| Completion delivery                             | PostgreSQL outbox and result worker           |
+| Hub result delivery                             | One-shot server-to-server reporter            |
 | Elo and rankings                                | External game hub                             |
 
 The browser validates draft placement previews with the shared semantic fleet validator because that state is still editable. It never calculates an accepted hit, sink, impossible cell, deadline action, turn, or result.
@@ -35,7 +35,7 @@ The browser validates draft placement previews with the shared semantic fleet va
 4. Elysia validates player commands before `MatchSession` serializes them.
 5. The aggregate accepts or rejects the semantic command synchronously.
 6. An accepted transition increments the revision and publishes a complete role-specific projection. A rejected command returns `commandRejected` without mutation.
-7. Terminal metadata and any hub outbox event commit in one transaction before the terminal projection is published and sockets close normally.
+7. Terminal metadata commits before the terminal projection is published and sockets close normally. Hub matches then trigger one asynchronous result request.
 
 Complete projections avoid frontend event replay and recovery logic. A newer revision atomically replaces the prior browser value; older or duplicate revisions are ignored.
 
@@ -45,7 +45,7 @@ Eden Treaty derives both lifecycle requests and live socket paths from the compo
 
 A `players` row has an internal UUID plus `(identity_source, external_id)`. The unique pair keeps anonymous browser UUIDs and hub UUIDs separate even when their text is identical. Human `match_seats` rows reference that internal player and contain a unique match-scoped **Seat Token**. Bot rows contain neither.
 
-Ordinary projections contain only participant kind, readiness, connectivity, and seat number. They contain no player UUID or **Seat Token**. Hub result/query shapes recover hub UUIDs from persistence metadata, never from live authority.
+Ordinary projections contain participant display names, kinds, readiness, connectivity, and seat numbers. They contain no player UUID or **Seat Token**. Hub result payloads recover participant UUIDs from persisted match metadata, never from live authority.
 
 ## In-memory lifecycle
 
@@ -60,6 +60,6 @@ PostgreSQL stores:
 - namespaced players;
 - matches, source, mode, phase, timestamps, and terminal result;
 - human/bot seats, player references, seat tokens, and outcomes;
-- durable completion webhook events and retry state.
+- the normalized hub match definition needed for idempotency and result reporting.
 
 It does not store fleets, cells, shots, deadlines, WebSocket connections, spectators, or the aggregate.

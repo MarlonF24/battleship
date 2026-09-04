@@ -40,11 +40,18 @@ function placementProjection(revision: number): MatchProjection {
     participants: [
       {
         seat: 1,
+        name: "Player 1",
         descriptor: { kind: "human" },
         ready: false,
         connected: true,
       },
-      { seat: 2, descriptor: { kind: "open" }, ready: false, connected: false },
+      {
+        seat: 2,
+        name: "Player 2",
+        descriptor: { kind: "open" },
+        ready: false,
+        connected: false,
+      },
     ],
     viewer: { role: "player", seat: 1 },
     phase: "placement",

@@ -18,7 +18,7 @@ export function CompletionDialog({
     projection.winnerSeat === null
       ? "Game Ended Prematurely."
       : viewerSeat === null
-        ? `Player ${projection.winnerSeat} won!`
+        ? `${projection.participants[projection.winnerSeat - 1]?.name ?? `Player ${projection.winnerSeat}`} won!`
         : projection.winnerSeat === viewerSeat
           ? "Congratulations! You won!"
           : "Game Over! You lost.";

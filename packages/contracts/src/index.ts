@@ -20,6 +20,7 @@ FormatRegistry.Set("date-time", (value) => {
 });
 const strict = { additionalProperties: false } as const;
 const RelativeUrlSchema = Type.String({ pattern: "^/[^\\s]*$" });
+const AbsoluteHttpUrlSchema = Type.String({ pattern: "^https?://\\S+$" });
 
 /** Canonical UUID representation reused by every public contract. */
 export const UuidSchema = Type.String({ format: "uuid" });
@@ -48,7 +49,16 @@ export const HumanSeatSchema = Type.Object(
   { kind: Type.Literal("human") },
   strict,
 );
-export const BotSeatSchema = Type.Object({ kind: Type.Literal("bot") }, strict);
+export const BotDifficultySchema = Type.Union([
+  Type.Literal("easy"),
+  Type.Literal("normal"),
+  Type.Literal("hard"),
+]);
+export type BotDifficulty = Static<typeof BotDifficultySchema>;
+export const BotSeatSchema = Type.Object(
+  { kind: Type.Literal("bot"), difficulty: BotDifficultySchema },
+  strict,
+);
 export const SeatDescriptorSchema = Type.Union([
   HumanSeatSchema,
   BotSeatSchema,
@@ -107,60 +117,66 @@ export const ApiErrorSchema = Type.Object(
 );
 export type ApiError = Static<typeof ApiErrorSchema>;
 
-/** Human identity supplied by the authenticated game hub. */
-export const HubHumanSeatSchema = Type.Object(
-  { kind: Type.Literal("human"), playerId: UuidSchema },
+/** Participant description supplied under a UUID key by the game hub. */
+export const HubParticipantInputSchema = Type.Object(
+  {
+    name: Type.String({ minLength: 1, maxLength: 80, pattern: "\\S" }),
+    difficulty: Type.Union([Type.Literal("player"), BotDifficultySchema]),
+  },
   strict,
 );
-export const HubSeatDescriptorSchema = Type.Union([
-  HubHumanSeatSchema,
-  BotSeatSchema,
-]);
-export type HubSeatDescriptor = Static<typeof HubSeatDescriptorSchema>;
+export type HubParticipantInput = Static<typeof HubParticipantInputSchema>;
 
-/** Idempotent hub match creation input. */
+/** Optional game-specific choices carried in the hub's reserved config field. */
+export const HubMatchConfigSchema = Type.Object(
+  { mode: Type.Optional(GameModeSchema) },
+  strict,
+);
+
+/** UUID-keyed match creation body used by the shared game-hub protocol. */
 export const HubCreateMatchRequestSchema = Type.Object(
   {
-    hubMatchId: UuidSchema,
-    mode: GameModeSchema,
-    seats: Type.Tuple([HubSeatDescriptorSchema, HubSeatDescriptorSchema]),
+    room_uuid: UuidSchema,
+    config: HubMatchConfigSchema,
   },
-  strict,
-);
-export type HubCreateMatchRequest = Static<typeof HubCreateMatchRequestSchema>;
-
-export const HubSeatLinkSchema = Type.Union([
-  Type.Object(
-    {
-      seat: SeatSchema,
-      kind: Type.Literal("human"),
-      playerId: UuidSchema,
-      playerUrl: RelativeUrlSchema,
-    },
-    strict,
-  ),
-  Type.Object({ seat: SeatSchema, kind: Type.Literal("bot") }, strict),
-]);
-
-export const HubCreateMatchResponseSchema = Type.Object(
   {
-    matchId: UuidSchema,
-    hubMatchId: UuidSchema,
-    seats: Type.Tuple([HubSeatLinkSchema, HubSeatLinkSchema]),
-    spectatorUrl: RelativeUrlSchema,
-    resultUrl: RelativeUrlSchema,
+    additionalProperties: HubParticipantInputSchema,
   },
-  strict,
 );
-export type HubCreateMatchResponse = Static<
-  typeof HubCreateMatchResponseSchema
+export type HubCreateMatchWireRequest = Static<
+  typeof HubCreateMatchRequestSchema
 >;
 
-export const MatchPhaseSchema = Type.Union([
-  Type.Literal("placement"),
-  Type.Literal("battle"),
-  Type.Literal("completed"),
-]);
+/** Fully typed application input decoded from the protocol's dynamic keys. */
+export type HubParticipant = Readonly<{
+  playerId: string;
+  name: string;
+  difficulty: "player" | BotDifficulty;
+}>;
+export type HubMatchDefinition = Readonly<{
+  roomUuid: string;
+  mode: Static<typeof GameModeSchema>;
+  participants: readonly [HubParticipant, HubParticipant];
+}>;
+
+export const HubControllerLinkSchema = Type.Object(
+  { controller_link: Type.Union([AbsoluteHttpUrlSchema, Type.Literal("")]) },
+  strict,
+);
+
+/** UUID-keyed controller links plus the protocol extension for spectators. */
+export const HubCreateMatchResponseSchema = Type.Object(
+  {
+    room_uuid: UuidSchema,
+    config: Type.Object({ spectator_link: AbsoluteHttpUrlSchema }, strict),
+  },
+  {
+    additionalProperties: HubControllerLinkSchema,
+  },
+);
+export type HubCreateMatchWireResponse = Static<
+  typeof HubCreateMatchResponseSchema
+>;
 export const CompletionReasonSchema = Type.Union([
   Type.Literal("fleet_destroyed"),
   Type.Literal("no_players_connected"),
@@ -173,44 +189,24 @@ export const OutcomeSchema = Type.Union([
   Type.Literal("loss"),
   Type.Literal("premature"),
 ]);
+export type Outcome = Static<typeof OutcomeSchema>;
 
-/** Metadata-only hub query response; live boards never enter persistence. */
-export const HubMatchStatusSchema = Type.Object(
-  {
-    matchId: UuidSchema,
-    hubMatchId: UuidSchema,
-    mode: GameModeSchema,
-    phase: MatchPhaseSchema,
-    seats: Type.Tuple([
-      Type.Object(
-        {
-          seat: SeatSchema,
-          descriptor: HubSeatDescriptorSchema,
-          outcome: Type.Union([OutcomeSchema, Type.Null()]),
-        },
-        strict,
-      ),
-      Type.Object(
-        {
-          seat: SeatSchema,
-          descriptor: HubSeatDescriptorSchema,
-          outcome: Type.Union([OutcomeSchema, Type.Null()]),
-        },
-        strict,
-      ),
-    ]),
-    winnerSeat: Type.Union([SeatSchema, Type.Null()]),
-    terminalReason: Type.Union([CompletionReasonSchema, Type.Null()]),
-    createdAt: Type.String({ format: "date-time" }),
-    startedAt: Type.Union([Type.String({ format: "date-time" }), Type.Null()]),
-    completedAt: Type.Union([
-      Type.String({ format: "date-time" }),
-      Type.Null(),
-    ]),
-  },
+export const HubResultEntrySchema = Type.Object(
+  { outcome: OutcomeSchema },
   strict,
 );
-export type HubMatchStatus = Static<typeof HubMatchStatusSchema>;
+
+/** Terminal result body sent once to the hub after match persistence. */
+export const HubResultRequestSchema = Type.Object(
+  {
+    room_uuid: UuidSchema,
+    config: Type.Object({}, strict),
+  },
+  {
+    additionalProperties: HubResultEntrySchema,
+  },
+);
+export type HubResultWireRequest = Static<typeof HubResultRequestSchema>;
 
 /** Complete command union accepted from an authorized player socket. */
 export const PlayerCommandSchema = Type.Union([
@@ -278,6 +274,7 @@ export type RulesView = Static<typeof RulesViewSchema>;
 export const ParticipantSchema = Type.Object(
   {
     seat: SeatSchema,
+    name: Type.String(),
     descriptor: ParticipantDescriptorSchema,
     ready: Type.Boolean(),
     connected: Type.Boolean(),
@@ -394,36 +391,3 @@ export const ServerMessageSchema = Type.Union([
   ),
 ]);
 export type ServerMessage = Static<typeof ServerMessageSchema>;
-
-/** Durable completion event delivered to the configured game hub. */
-export const WebhookEventSchema = Type.Object(
-  {
-    eventId: UuidSchema,
-    type: Type.Literal("battleship.match.completed"),
-    hubMatchId: UuidSchema,
-    matchId: UuidSchema,
-    mode: GameModeSchema,
-    completedAt: Type.String({ format: "date-time" }),
-    terminalReason: CompletionReasonSchema,
-    seats: Type.Tuple([
-      Type.Object(
-        {
-          seat: SeatSchema,
-          descriptor: HubSeatDescriptorSchema,
-          outcome: OutcomeSchema,
-        },
-        strict,
-      ),
-      Type.Object(
-        {
-          seat: SeatSchema,
-          descriptor: HubSeatDescriptorSchema,
-          outcome: OutcomeSchema,
-        },
-        strict,
-      ),
-    ]),
-  },
-  strict,
-);
-export type WebhookEvent = Static<typeof WebhookEventSchema>;

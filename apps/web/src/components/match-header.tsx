@@ -26,13 +26,13 @@ export const MatchHeader = observer(function MatchHeader({
       ? store.socketState === "connected"
         ? "Spectating live game..."
         : "Reconnecting to the live game..."
-      : otherParticipant?.descriptor.kind === "bot"
-        ? "Computer opponent ready"
-        : otherParticipant?.descriptor.kind === "open"
-          ? "Waiting for opponent to connect..."
-          : otherParticipant?.connected
-            ? "Opponent connected"
-            : "Opponent disconnected";
+      : !otherParticipant || otherParticipant.descriptor.kind === "open"
+        ? "Waiting for opponent to connect..."
+        : otherParticipant.descriptor.kind === "bot"
+          ? `${otherParticipant.name} ready (${otherParticipant.descriptor.difficulty})`
+          : otherParticipant.connected
+            ? `${otherParticipant.name} connected`
+            : `${otherParticipant.name} disconnected`;
 
   const seconds = store.remainingSeconds;
   const timerRelevant =

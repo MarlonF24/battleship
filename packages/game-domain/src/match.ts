@@ -2,7 +2,7 @@
 
 import { BattleBoard, type ShotOutcome } from "./board";
 import { ValidatedFleet } from "./fleet";
-import { chooseProbabilityTarget } from "./agent";
+import { chooseBotTarget } from "./agent";
 import {
   shotsPerTurn,
   retainsTurn,
@@ -320,9 +320,14 @@ export class Match {
     if (this.state.phase !== "battle") {
       return error("invalid_phase", "Bot shots require an active battle.");
     }
+    const descriptor = this.state.descriptors[seatIndex(seat)];
+    if (descriptor.kind !== "bot") {
+      return error("invalid_phase", "Bot shots require a bot-controlled seat.");
+    }
     const targetBoard = this.state.boards[seatIndex(otherSeat(seat))];
-    const coordinate = chooseProbabilityTarget(
+    const coordinate = chooseBotTarget(
       targetBoard.opponentKnowledge(),
+      descriptor.difficulty,
       random,
     );
     return this.shoot(seat, coordinate);

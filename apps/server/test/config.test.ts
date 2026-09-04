@@ -14,8 +14,8 @@ const validEnvironment = Object.freeze({
   LOG_LEVEL: "info",
   NODE_ENV: "test",
   HUB_ENABLED: "false",
-  HUB_SHARED_TOKEN: "",
-  HUB_RESULT_WEBHOOK_URL: "",
+  HUB_BASE_URL: "",
+  PUBLIC_BASE_URL: "",
 });
 
 describe("strict server configuration", () => {
@@ -64,26 +64,26 @@ describe("strict server configuration", () => {
 
   test("requires an all-or-nothing enabled hub configuration", () => {
     expect(() =>
-      loadConfig({ ...validEnvironment, HUB_SHARED_TOKEN: "unexpected" }),
+      loadConfig({ ...validEnvironment, HUB_BASE_URL: "https://hub.example" }),
     ).toThrow();
     expect(() =>
       loadConfig({
         ...validEnvironment,
         HUB_ENABLED: "true",
-        HUB_SHARED_TOKEN: "hub-token",
+        HUB_BASE_URL: "https://hub.example",
       }),
     ).toThrow();
 
     const config = loadConfig({
       ...validEnvironment,
       HUB_ENABLED: "true",
-      HUB_SHARED_TOKEN: "hub-token",
-      HUB_RESULT_WEBHOOK_URL: "https://hub.example/results",
+      HUB_BASE_URL: "https://hub.example",
+      PUBLIC_BASE_URL: "https://battleship.example",
     });
     expect(config.hub).toEqual({
       enabled: true,
-      sharedToken: "hub-token",
-      resultWebhookUrl: "https://hub.example/results",
+      hubBaseUrl: "https://hub.example",
+      publicBaseUrl: "https://battleship.example",
     });
   });
 });

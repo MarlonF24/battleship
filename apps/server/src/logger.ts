@@ -13,7 +13,6 @@ export function createLogger(level: string): Logger {
       "*.seatToken",
       "databaseUrl",
       "dbPassword",
-      "hub.sharedToken",
       "req.headers.authorization",
     ],
   });

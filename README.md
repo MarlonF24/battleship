@@ -4,7 +4,7 @@ A full-stack, real-time Battleship game for friends, event game hubs, spectators
 
 ![Battleship placement interface](./assets/showcase.png)
 
-The active application is a Bun workspace: React and MobX render complete server projections, Elysia owns live sessions, shared TypeScript packages define rules and wire contracts, and PostgreSQL stores identities, match metadata, results, and webhook delivery state.
+The active application is a Bun workspace: React and MobX render complete server projections, Elysia owns live sessions, shared TypeScript packages define rules and wire contracts, and PostgreSQL stores identities, match metadata, and results.
 
 ## Identity and access
 
@@ -92,7 +92,7 @@ docs                     Protocol, architecture, rules, and operations
 
 ## Deliberate runtime limitation
 
-Accepted fleets, shots, deadlines, and active aggregates live only in one server process. They are not stored in PostgreSQL and are not restored after a crash or restart. On startup, every nonterminal database match becomes a premature `server_restart` result; affected hub matches receive a durable outbox event. Completed boards also disappear when their in-memory session is discarded, so a late spectator sees a clear unavailable state.
+Accepted fleets, shots, deadlines, and active aggregates live only in one server process. They are not stored in PostgreSQL and are not restored after a crash or restart. On startup, every nonterminal database match becomes a premature `server_restart` result; affected hub matches receive one result-delivery attempt. Completed boards also disappear when their in-memory session is discarded, so a late spectator sees a clear unavailable state.
 
 Run exactly one production server replica unless the live-session architecture is deliberately replaced.
 

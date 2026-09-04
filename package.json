@@ -8,7 +8,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun db:push && bun run --filter '*' --parallel dev",
+    "dev": "bun run --filter '*' --parallel dev",
     "dev:server": "bun --filter @battleship/server dev",
     "dev:web": "bun --filter @battleship/web dev",
     "build": "bun run build:server && bun run build:web",

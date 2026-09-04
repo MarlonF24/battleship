@@ -55,7 +55,7 @@ type SessionOptions = Readonly<{
   clock?: Clock;
   scheduler?: Scheduler;
   random?: RandomSource;
-  onCompleted?: (matchId: string) => void;
+  onCompleted?: (match: StoredMatch) => void;
 }>;
 
 function descriptorsFromStoredMatch(
@@ -91,7 +91,7 @@ export class MatchSession {
   private readonly clock: Clock;
   private readonly scheduler: Scheduler;
   private readonly random: RandomSource;
-  private readonly onCompleted: (matchId: string) => void;
+  private readonly onCompleted: (match: StoredMatch) => void;
   private deadline: Deadline | null = null;
   private commandChain = Promise.resolve();
   private revision = 0;
@@ -538,7 +538,7 @@ export class MatchSession {
     this.completed = true;
     this.cancelDeadline();
 
-    // Persist result/outbox atomically before any client receives completion.
+    // Persist the result before any client receives authoritative completion.
     this.stored = await this.repository.completeMatch({
       matchId: this.id,
       winnerSeat: state.winnerSeat,
@@ -550,7 +550,7 @@ export class MatchSession {
     );
     this.bumpAndPublish();
     this.closePeers(1000, "Match completed.");
-    this.onCompleted(this.id);
+    this.onCompleted(this.stored);
   }
 
   private bumpAndPublish(): void {
@@ -684,8 +684,10 @@ export class MatchSession {
         : [true, true];
     const participant = (seat: Seat): Participant => {
       const descriptor = descriptors[seatIndex(seat)];
+      const storedSeat = this.stored.seats[seatIndex(seat)];
       return {
         seat,
+        name: storedSeat?.name ?? `Player ${seat}`,
         descriptor,
         ready: readiness[seatIndex(seat)] ?? false,
         connected: descriptor.kind === "bot" || this.playerPeers.has(seat),

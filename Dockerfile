@@ -20,6 +20,7 @@ RUN bun run build
 FROM dependencies AS runtime
 
 ENV NODE_ENV=production
+EXPOSE 8000
 
 # The runtime includes the schema sources required by Drizzle Kit, followed by
 # the bundled server and static frontend used after schema synchronization.

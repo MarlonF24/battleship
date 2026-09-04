@@ -10,9 +10,9 @@ Application fields:
 - `SERVER_PORT`, `VITE_PORT` (both optional and defaulted);
 - `CORS_ALLOWED_ORIGINS`;
 - `LOG_LEVEL`, `NODE_ENV`;
-- `HUB_ENABLED`, `HUB_SHARED_TOKEN`, `HUB_RESULT_WEBHOOK_URL`.
+- `HUB_ENABLED`, `HUB_BASE_URL`, `PUBLIC_BASE_URL`.
 
-`CORS_ALLOWED_ORIGINS` is empty for the normal same-origin deployment and accepts comma-separated external browser origins when needed. `DB_PORT` is both the PostgreSQL container port and its published host port. `HUB_ENABLED=false` requires both hub credential fields to be empty; `HUB_ENABLED=true` requires both.
+`CORS_ALLOWED_ORIGINS` is empty for the normal same-origin deployment and accepts comma-separated external browser origins when needed. `DB_PORT` is both the PostgreSQL container port and its published host port. `HUB_ENABLED=false` requires both hub URL fields to be empty; `HUB_ENABLED=true` requires both. `HUB_BASE_URL` is server-to-server, while `PUBLIC_BASE_URL` supplies browser-reachable links returned to the hub.
 
 The server selects only known keys before strict validation, so unrelated shell variables are not treated as configuration. No application module reads `Bun.env` after startup. Drizzle and the server call the same five-field database URL decoder.
 

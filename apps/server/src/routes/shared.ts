@@ -11,10 +11,6 @@ import type { MatchSessionRegistry } from "../session/registry";
 const strict = { additionalProperties: false } as const;
 
 export const MatchParamsSchema = Type.Object({ matchId: UuidSchema }, strict);
-export const HubMatchParamsSchema = Type.Object(
-  { hubMatchId: UuidSchema },
-  strict,
-);
 export const PlayerQuerySchema = Type.Object({ seatToken: UuidSchema }, strict);
 export const HealthSchema = Type.Object({ status: Type.Literal("ok") }, strict);
 

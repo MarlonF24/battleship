@@ -36,6 +36,11 @@ function opposite(seat: Seat): Seat {
   return seat === 1 ? 2 : 1;
 }
 
+/** Resolve a stable board/status label from projected match metadata. */
+function participantName(projection: BattleLikeProjection, seat: Seat): string {
+  return projection.participants[seat - 1]?.name ?? `Player ${seat}`;
+}
+
 function BoardGroup({
   item,
   fleetLengths,
@@ -97,7 +102,7 @@ export const BattleView = observer(function BattleView({
           {
             seat: opposite(view.seat),
             board: view.opponentBoard,
-            label: "Opponent board",
+            label: `${participantName(projection, opposite(view.seat))}'s board`,
             fleetSide: "right",
           },
         ]
@@ -105,17 +110,17 @@ export const BattleView = observer(function BattleView({
           {
             seat: 1,
             board: view.boards[0],
-            label: "Player 1 board",
+            label: `${participantName(projection, 1)}'s board`,
             fleetSide: "left",
           },
           {
             seat: 2,
             board: view.boards[1],
-            label: "Player 2 board",
+            label: `${participantName(projection, 2)}'s board`,
             fleetSide: "right",
           },
         ];
-  }, [projection.view]);
+  }, [projection]);
 
   const targetedSeat =
     projection.phase === "battle" ? opposite(projection.turnSeat) : null;
@@ -158,10 +163,10 @@ export const BattleView = observer(function BattleView({
     projection.phase === "completed"
       ? "Game over"
       : playerSeat === null
-        ? `Player ${projection.turnSeat}'s turn`
+        ? `${participantName(projection, projection.turnSeat)}'s turn`
         : canShoot
           ? "Your turn"
-          : "Opponent's turn";
+          : `${participantName(projection, opposite(playerSeat))}'s turn`;
 
   const boardInteractive = (seat: Seat): boolean => seat === targetableSeat;
   const boardOpacity = (seat: Seat): number =>
@@ -214,7 +219,9 @@ export const BattleView = observer(function BattleView({
               {boards.map((board) => (
                 <Button
                   key={board.seat}
-                  variant={displayed.seat === board.seat ? "primary" : "neutral"}
+                  variant={
+                    displayed.seat === board.seat ? "primary" : "neutral"
+                  }
                   onClick={() => responsive.selectFinalBoard(board.seat)}
                 >
                   {board.label}

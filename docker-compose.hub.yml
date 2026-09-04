@@ -1,50 +1,53 @@
-name: battleship
+name: battleship-hub
 
+# This stack is launched once. The hub creates individual rooms through the
+# HTTP API instead of starting one game container per room.
 services:
   db:
     image: postgres:17-alpine
-    command: ["postgres", "-p", "${DB_PORT:-5432}"]
     environment:
-      POSTGRES_USER: ${DB_USER:-battleship_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      POSTGRES_DB: ${DB_NAME:-battleship}
-    ports:
-      - "${DB_PORT:-5432}:${DB_PORT:-5432}"
+      POSTGRES_USER: battleship
+      POSTGRES_PASSWORD: battleship
+      POSTGRES_DB: battleship
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - hub_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${DB_USER:-battleship_user} -d ${DB_NAME:-battleship} -p ${DB_PORT:-5432}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U battleship -d battleship"]
       interval: 3s
       timeout: 3s
       retries: 20
+    restart: unless-stopped
 
   server:
-    image: ghcr.io/marlonf24/battleship:latest
-    pull_policy: always
+    build:
+      context: .
+      dockerfile: Dockerfile
     ports:
-      - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
+      - "127.0.0.1:${BATTLESHIP_HOST_PORT:-8001}:8000"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
-      DB_USER: ${DB_USER:-battleship_user}
-      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
-      DB_NAME: ${DB_NAME:-battleship}
+      DB_USER: battleship
+      DB_PASSWORD: battleship
+      DB_NAME: battleship
       DB_HOST: db
-      DB_PORT: ${DB_PORT:-5432}
-      DB_SSL: false
-      SERVER_PORT: ${SERVER_PORT:-8000}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?Set CORS_ALLOWED_ORIGINS in environment as comma-separated list of origins, including the hub origin}
-      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DB_PORT: 5432
+      DB_SSL: "false"
+      SERVER_PORT: 8000
+      CORS_ALLOWED_ORIGINS: ""
+      LOG_LEVEL: info
       NODE_ENV: production
-      HUB_ENABLED: true
-      HUB_SHARED_TOKEN: ${HUB_SHARED_TOKEN:?Set HUB_SHARED_TOKEN in environment}
-      HUB_RESULT_WEBHOOK_URL: ${HUB_RESULT_WEBHOOK_URL:?Set HUB_RESULT_WEBHOOK_URL in environment}
+      HUB_ENABLED: "true"
+      # The existing hub launcher calls this HUB_URL. Compose maps that
+      # deployment input to the application's canonical configuration name.
+      HUB_BASE_URL: ${HUB_URL:?The hub must inject its container-reachable HUB_URL}
+      # localhost:8001 works for a local hub. A deployed hub must inject the
+      # browser-reachable Battleship origin instead.
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL:-http://localhost:8001}
     depends_on:
       db:
         condition: service_healthy
     restart: unless-stopped
 
 volumes:
-  postgres_data:
+  hub_postgres_data:

@@ -36,8 +36,8 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:?Set LOG_LEVEL in .env}
       NODE_ENV: production
       HUB_ENABLED: ${HUB_ENABLED:?Set HUB_ENABLED in .env}
-      HUB_SHARED_TOKEN: ${HUB_SHARED_TOKEN}
-      HUB_RESULT_WEBHOOK_URL: ${HUB_RESULT_WEBHOOK_URL}
+      HUB_BASE_URL: ${HUB_BASE_URL}
+      PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
     depends_on:
       db:
         condition: service_healthy

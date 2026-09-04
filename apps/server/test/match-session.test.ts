@@ -58,12 +58,14 @@ async function createHumanSession(
       {
         seat: 1,
         kind: "human",
+        name: "Player 1",
         identity: { source: "standalone", externalId: firstPlayer },
         seatToken: firstSeatToken,
       },
       {
         seat: 2,
         kind: "human",
+        name: "Player 2",
         identity: { source: "standalone", externalId: secondPlayer },
         seatToken: secondSeatToken,
       },
