@@ -250,6 +250,10 @@
     display: none;
   }
 
+  .game-shell .mobile-match-id-copy {
+    display: inline-flex;
+  }
+
   .game-shell .match-header {
     margin-bottom: 0.5rem;
   }

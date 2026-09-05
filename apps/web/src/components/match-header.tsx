@@ -63,6 +63,15 @@ export const MatchHeader = observer(function MatchHeader({
 
       <div className="match-status-row flex min-h-12 w-full items-center justify-center gap-3 text-center">
         <p className="connection-status text-[#444] italic">{connectionText}</p>
+        <button
+          type="button"
+          onClick={() => void copyId()}
+          aria-label="Copy complete Game ID"
+          className="mobile-match-id-copy text-primary hover:bg-primary active:bg-primary hidden shrink-0 cursor-pointer items-center gap-1.5 rounded-md border-2 border-current bg-white px-2.5 py-1.5 text-sm font-semibold hover:text-white active:text-white"
+        >
+          <span aria-hidden="true">{copied ? "✓" : "⧉"}</span>
+          {copied ? "Copied" : "Copy Game ID"}
+        </button>
         <div className="timer-slot flex h-12 w-[4.75rem] shrink-0 items-center justify-center">
           {timer !== null && (
             <div
