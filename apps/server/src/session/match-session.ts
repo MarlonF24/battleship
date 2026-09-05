@@ -43,11 +43,15 @@ export type SocketPeer = Readonly<{
 }>;
 
 type Deadline = Readonly<{
-  kind: "placement" | "battleStart" | "shot" | "reconnect" | "bot";
+  kind:
+    "placement" | "battleStart" | "shot" | "reconnect" | "bot" | "abandonment";
   seat: Seat | null;
   at: number;
   handle: ScheduledHandle;
 }>;
+
+/** Time allowed for a mobile player to background the game and return/share it. */
+export const NO_PLAYERS_CONNECTED_GRACE_MS = 2 * 60 * 1_000;
 
 type SessionOptions = Readonly<{
   repository: MatchRepository;
@@ -154,7 +158,7 @@ export class MatchSession {
     this.stored = stored;
     this.logger.info({ seat: 2 }, "Open match seat joined");
     this.bumpAndPublish();
-    this.scheduleForCurrentState(2);
+    this.scheduleForCurrentState();
   }
 
   /** Attach a player connection after resolving its match-scoped seat token. */
@@ -179,8 +183,9 @@ export class MatchSession {
     this.lastActivityMs = this.clock.now();
 
     this.serialise(() => {
+      if (this.deadline?.kind === "abandonment") this.cancelDeadline();
       this.bumpAndPublish();
-      this.scheduleForCurrentState(seat);
+      this.scheduleForCurrentState();
     });
     return true;
   }
@@ -205,14 +210,11 @@ export class MatchSession {
     this.logger.info({ seat, peerId }, "Player socket disconnected");
     this.lastActivityMs = this.clock.now();
 
-    this.serialise(async () => {
+    this.serialise(() => {
       this.bumpAndPublish();
       const state = this.match.getState();
-      if (
-        state.phase === "placement" &&
-        state.seats[1].descriptor.kind === "open"
-      ) {
-        await this.completePremature("no_players_connected");
+      if (!this.hasConnectedHumanPlayer()) {
+        this.setDeadline("abandonment", null, NO_PLAYERS_CONNECTED_GRACE_MS);
         return;
       }
       if (state.phase === "battle" && state.turnSeat === seat) {
@@ -391,6 +393,13 @@ export class MatchSession {
       return;
     }
 
+    if (kind === "abandonment") {
+      if (!this.hasConnectedHumanPlayer()) {
+        await this.completePremature("no_players_connected");
+      }
+      return;
+    }
+
     if (kind === "placement" && seat) {
       const fleet = generateRandomFleet(this.random);
       if (!fleet.ok) throw new Error(fleet.error.message);
@@ -429,32 +438,25 @@ export class MatchSession {
     }
   }
 
-  private scheduleForCurrentState(connectedSeat: Seat): void {
+  private scheduleForCurrentState(): void {
     const state = this.match.getState();
     if (state.phase === "placement") {
-      const current = state.seats[seatIndex(connectedSeat)];
-      const other = state.seats[seatIndex(connectedSeat === 1 ? 2 : 1)];
-      if (
-        !current.ready &&
-        other.ready &&
-        this.deadline?.kind !== "battleStart"
-      ) {
-        this.setDeadline(
-          "placement",
-          connectedSeat,
-          this.match.rules.placementTimeoutMs,
-        );
+      if (this.deadline?.kind !== "battleStart") {
+        this.schedulePlacementForWaitingSeat();
       }
       return;
     }
-    if (state.phase === "battle" && state.turnSeat === connectedSeat) {
-      this.scheduleTurn();
-    }
+    if (state.phase === "battle") this.scheduleTurn();
   }
 
   private schedulePlacementForWaitingSeat(): void {
     const state = this.match.getState();
-    if (state.phase !== "placement") return;
+    if (
+      state.phase !== "placement" ||
+      !state.seats.some(({ ready }) => ready)
+    ) {
+      return;
+    }
     const waitingIndex = state.seats.findIndex(({ ready }) => !ready);
     const waitingSeat: Seat | null =
       waitingIndex === 0 ? 1 : waitingIndex === 1 ? 2 : null;
@@ -482,15 +484,11 @@ export class MatchSession {
       );
     }
 
-    const humanDescriptors = state.descriptors.filter(
+    const hasHumanPlayer = state.descriptors.some(
       (descriptor) => descriptor.kind === "human",
     );
-    const anyHumanConnected = ([1, 2] as const).some((seat) => {
-      const descriptor = state.descriptors[seatIndex(seat)];
-      return descriptor.kind === "human" && this.playerPeers.has(seat);
-    });
-    if (humanDescriptors.length > 0 && !anyHumanConnected) {
-      await this.completePremature("no_players_connected");
+    if (hasHumanPlayer && !this.hasConnectedHumanPlayer()) {
+      this.setDeadline("abandonment", null, NO_PLAYERS_CONNECTED_GRACE_MS);
       return;
     }
     // Installing the next action deadline also publishes the accepted shot.
@@ -529,6 +527,14 @@ export class MatchSession {
     this.logger.warn({ reason }, "Match ending prematurely");
     this.match.abort(reason);
     await this.persistAndClose();
+  }
+
+  /** Return whether at least one human seat currently has a live socket. */
+  private hasConnectedHumanPlayer(): boolean {
+    return ([1, 2] as const).some((seat) => {
+      const descriptor = this.descriptors()[seatIndex(seat)];
+      return descriptor.kind === "human" && this.playerPeers.has(seat);
+    });
   }
 
   private async persistAndClose(): Promise<void> {

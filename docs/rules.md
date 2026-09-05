@@ -40,7 +40,7 @@ If a reconnect succeeds before expiry, the player receives a fresh complete proj
 
 ## Connections and premature results
 
-A new socket using the same **Seat Token** replaces the prior socket. Spectators never affect abandonment. When no human player connections remain after current automatic processing reaches the abandonment condition, the match completes prematurely with `no_players_connected`.
+A new socket using the same **Seat Token** replaces the prior socket. Spectators never affect abandonment. If every human player socket disconnects, the match pauses for a two-minute grace period so a mobile player can briefly leave the browser to share or reopen the game. Any player connection cancels that deadline and resumes the appropriate game timer; otherwise, the match completes prematurely with `no_players_connected`.
 
 Server restart, extended placement inactivity, and extended battle inactivity also create explicit premature results. Active games are never resumed.
 

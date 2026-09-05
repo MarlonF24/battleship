@@ -6,7 +6,14 @@ import {
   placementCoordinates,
   type GameMode,
 } from "@battleship/game-domain";
-import { MatchSession } from "../src/session/match-session";
+import {
+  MatchSession,
+  NO_PLAYERS_CONNECTED_GRACE_MS,
+} from "../src/session/match-session";
+import type {
+  CreateStoredMatchInput,
+  CreateStoredSeatInput,
+} from "../src/repository";
 import { MemoryMatchRepository } from "../src/testing/memory-repository";
 import {
   CapturingPeer,
@@ -47,29 +54,32 @@ async function createHumanSession(
   runtime: ManualRuntime,
   repository = new MemoryMatchRepository(),
   mode: GameMode = "singleShot",
+  hasSecondPlayer = true,
 ) {
+  const firstSeat: CreateStoredSeatInput = {
+    seat: 1,
+    kind: "human",
+    name: "Player 1",
+    identity: { source: "standalone", externalId: firstPlayer },
+    seatToken: firstSeatToken,
+  };
+  const secondSeat: CreateStoredSeatInput = {
+    seat: 2,
+    kind: "human",
+    name: "Player 2",
+    identity: { source: "standalone", externalId: secondPlayer },
+    seatToken: secondSeatToken,
+  };
+  const seats: CreateStoredMatchInput["seats"] = hasSecondPlayer
+    ? [firstSeat, secondSeat]
+    : [firstSeat, null];
   const stored = await repository.createMatch({
     id: matchId,
     hubMatchId: null,
     hubRequest: null,
     source: "standalone",
     mode,
-    seats: [
-      {
-        seat: 1,
-        kind: "human",
-        name: "Player 1",
-        identity: { source: "standalone", externalId: firstPlayer },
-        seatToken: firstSeatToken,
-      },
-      {
-        seat: 2,
-        kind: "human",
-        name: "Player 2",
-        identity: { source: "standalone", externalId: secondPlayer },
-        seatToken: secondSeatToken,
-      },
-    ],
+    seats,
   });
   return {
     repository,
@@ -190,6 +200,31 @@ describe("match session", () => {
     session.disconnectPlayer(firstSeatToken, oldPeer.id);
     await settle();
     expect(latestProjection(newPeer).participants[0].connected).toBe(true);
+  });
+
+  test("keeps a disconnected match alive when a player reconnects during the grace period", async () => {
+    const runtime = new ManualRuntime();
+    const { session } = await createHumanSession(
+      runtime,
+      new MemoryMatchRepository(),
+      "singleShot",
+      false,
+    );
+    const first = new CapturingPeer("first");
+    session.connectPlayer(firstSeatToken, first);
+    await settle();
+
+    session.disconnectPlayer(firstSeatToken, first.id);
+    await settle();
+    runtime.advanceBy(NO_PLAYERS_CONNECTED_GRACE_MS - 1);
+    await settle();
+    expect(session.phase).toBe("placement");
+
+    session.connectPlayer(firstSeatToken, new CapturingPeer("reconnected"));
+    await settle();
+    runtime.advanceBy(NO_PLAYERS_CONNECTED_GRACE_MS);
+    await settle();
+    expect(session.phase).toBe("placement");
   });
 
   test("persists a terminal result before publishing it exactly once", async () => {
