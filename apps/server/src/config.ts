@@ -35,7 +35,6 @@ const DatabaseSettings = Settings(databaseProperties, { databaseUrl });
 
 type ComputedInput = {
   corsAllowedOrigins: string;
-  hubEnabled: boolean;
   hubBaseUrl: string;
   publicBaseUrl: string;
 };
@@ -68,7 +67,6 @@ const AppSettings = Settings(
       Settings.Literal("test"),
       Settings.Literal("production"),
     ]),
-    hubEnabled: Settings.Boolean(),
     hubBaseUrl: Settings.Union([
       Settings.Literal(""),
       Settings.String({ pattern: HTTP_URL_PATTERN }),
@@ -113,12 +111,12 @@ const AppSettings = Settings(
     hub: (config: ComputedInput): HubConfig => {
       const hasHubUrl = Boolean(config.hubBaseUrl);
       const hasPublicUrl = Boolean(config.publicBaseUrl);
-      if (hasHubUrl !== hasPublicUrl || config.hubEnabled !== hasHubUrl) {
+      if (hasHubUrl !== hasPublicUrl) {
         throw new Error(
-          "Hub configuration requires both base URLs when enabled and neither when disabled.",
+          "Hub configuration requires both base URLs or neither.",
         );
       }
-      if (!config.hubEnabled) return { enabled: false };
+      if (!hasHubUrl) return { enabled: false };
 
       // Origins deliberately exclude paths so protocol routes and browser
       // links resolve identically in every deployment.

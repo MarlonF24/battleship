@@ -5,11 +5,12 @@
 The production Compose file defines:
 
 - PostgreSQL with a readiness healthcheck;
-- one Elysia server that starts after PostgreSQL is healthy.
+- a one-shot migration job that starts after PostgreSQL is healthy;
+- one Elysia server that starts after all migrations succeed.
 
 The multi-stage Dockerfile performs a frozen workspace install and builds the server bundle and Vite SPA. Pushes to `main` publish `ghcr.io/marlonf24/battleship:latest` plus a commit-specific tag for both AMD64 and ARM64; `v1.2.3`-style Git tags additionally publish semantic `1.2.3`, `1.2`, and `1` image tags. Pull requests build without publishing. The default Compose file pulls `latest` rather than building locally. The GHCR package must be made public after its first publication if unauthenticated users should be able to run Compose directly.
 
-At container startup, the runtime runs `drizzle-kit push` without `--force`; the server starts only after schema synchronization succeeds. A destructive or ambiguous schema change therefore requires explicit operator handling rather than automatic approval. Elysia then serves the SPA while keeping `/api`, `/health`, and `/openapi` outside the history fallback.
+The Docker image starts only Elysia. Compose overrides the same image's command for the migration job, so database changes remain a deployment concern and the application process never mutates its schema. Elysia serves the SPA while keeping `/api`, `/health`, and `/openapi` outside the history fallback.
 
 ## Single-replica requirement
 
@@ -21,15 +22,15 @@ PostgreSQL stores enough information to report that a match ended, not enough to
 
 Use the canonical variables documented directly in `.env.example` and set `NODE_ENV=production`. Keep `CORS_ALLOWED_ORIGINS` empty when Elysia serves both the page and API; list only external browser origins that must call the API directly. Do not publish PostgreSQL outside its trusted network in production unless operations require it.
 
-Hub integration is explicitly enabled or disabled. When enabled, set `HUB_BASE_URL` to the hub origin reachable by the Battleship container and `PUBLIC_BASE_URL` to the Battleship origin reachable by players' browsers. The hub backend calls the API over a trusted deployment network; `CORS_ALLOWED_ORIGINS` can remain empty because no cross-origin browser request is involved.
+Leave both hub URLs empty to disable integration. To enable it, set `HUB_BASE_URL` to the hub origin reachable by the Battleship container and `PUBLIC_BASE_URL` to the Battleship origin reachable by players' browsers. A partial pair fails startup validation. The hub backend calls the API over a trusted deployment network; `CORS_ALLOWED_ORIGINS` can remain empty because no cross-origin browser request is involved.
 
-The regular Compose stack is reusable by the hub. Configure `.env`, then launch it once:
+Configure `.env`, then launch the standalone stack once:
 
 ```bash
 docker compose up
 ```
 
-For a source checkout embedded directly in the hub repository, `docker-compose.hub.yml` instead provides a self-contained build with internal database settings. It requires `HUB_URL`, defaults to local browser access at `http://localhost:8001`, and accepts `PUBLIC_BASE_URL` for hosted routing. See the hub integration guide for the exact launch contract.
+The Game Night repository has its own top-level Compose file. It runs this image, a dedicated PostgreSQL service, and the same one-shot migration command while supplying the hub's internal and browser-facing origins.
 
 ## Readiness and shutdown
 
@@ -39,58 +40,17 @@ On shutdown, the server stops accepting work, closes sockets with a restart reas
 
 ## Database operations
 
-Deployments created with the former `match_seats.capability` column must run this statement once through the database provider before deploying an image that expects `seat_token`:
-
-```sql
-BEGIN;
-ALTER TABLE match_seats RENAME COLUMN capability TO seat_token;
-ALTER INDEX match_seats_capability_unique
-  RENAME TO match_seats_seat_token_unique;
-COMMIT;
-```
-
-Fresh databases already receive `seat_token` and must skip that statement.
-
-Databases created before standalone bot difficulty selection must persist the previous fixed `hard` behavior before deploying the corresponding application image:
-
-```sql
-BEGIN;
-CREATE TYPE bot_difficulty AS ENUM ('easy', 'normal', 'hard');
-ALTER TABLE match_seats ADD COLUMN bot_difficulty bot_difficulty;
-UPDATE match_seats SET bot_difficulty = 'hard' WHERE kind = 'bot';
-ALTER TABLE match_seats DROP CONSTRAINT match_seats_kind_access_check;
-ALTER TABLE match_seats ADD CONSTRAINT match_seats_kind_access_check CHECK (
-  (kind = 'human' AND player_id IS NOT NULL AND seat_token IS NOT NULL AND bot_difficulty IS NULL)
-  OR
-  (kind = 'bot' AND player_id IS NULL AND seat_token IS NULL AND bot_difficulty IS NOT NULL)
-);
-COMMIT;
-```
-
-Fresh databases receive the final enum, column, and constraint directly through Drizzle and must skip this statement.
-
-Synchronize the configured database with the current Drizzle schema before server rollout:
+Generate and inspect a migration whenever `apps/server/src/db/schema.ts` changes:
 
 ```bash
-bun run db:push
+bun run db:generate
 ```
 
-Container startup performs the same operation before launching Elysia. `drizzle-kit push` compares the live database with the declared schema and may require operator input for destructive changes, so resolve and back up the target before production deployment.
+Commit the generated SQL and metadata in `drizzle/`. Compose runs `bun run db:migrate` once per startup; Drizzle records applied migrations and executes only pending files. A failed migration prevents the server from starting.
 
-Before deploying this hub protocol over a database containing disposable provisional hub data, delete matches with `source = 'hub'` and then remove unreferenced `hub` players. Apply the schema synchronization afterward so the obsolete result-outbox table can be removed. Retain standalone matches and players.
+`bun run db:push` remains available for disposable development databases. It is not used by the image or Compose because schema pushes can require interactive decisions and `--force` could approve destructive changes.
 
-```sql
-BEGIN;
-DELETE FROM matches WHERE source = 'hub';
-DELETE FROM players
-WHERE identity_source = 'hub'
-  AND NOT EXISTS (
-    SELECT 1 FROM match_seats WHERE match_seats.player_id = players.id
-  );
-COMMIT;
-```
-
-For a deliberate pre-cutover development reset only:
+The initial migration expects a fresh database. Databases created earlier with `db:push` have no migration journal and should be explicitly recreated or baselined by an operator before adopting this deployment flow. To discard the local Compose database:
 
 ```bash
 docker compose down --volumes

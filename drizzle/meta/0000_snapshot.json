@@ -1,0 +1,429 @@
+{
+  "id": "94f00579-7ac6-410e-b61c-00a375b4f322",
+  "prevId": "00000000-0000-0000-0000-000000000000",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {
+    "public.match_seats": {
+      "name": "match_seats",
+      "schema": "",
+      "columns": {
+        "match_id": {
+          "name": "match_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "seat": {
+          "name": "seat",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "seat_kind",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "player_id": {
+          "name": "player_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "seat_token": {
+          "name": "seat_token",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "bot_difficulty": {
+          "name": "bot_difficulty",
+          "type": "bot_difficulty",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "outcome": {
+          "name": "outcome",
+          "type": "match_outcome",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "match_seats_human_unique": {
+          "name": "match_seats_human_unique",
+          "columns": [
+            {
+              "expression": "match_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "player_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "match_seats_seat_token_unique": {
+          "name": "match_seats_seat_token_unique",
+          "columns": [
+            {
+              "expression": "seat_token",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "match_seats_match_id_matches_id_fk": {
+          "name": "match_seats_match_id_matches_id_fk",
+          "tableFrom": "match_seats",
+          "tableTo": "matches",
+          "columnsFrom": [
+            "match_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "match_seats_player_id_players_id_fk": {
+          "name": "match_seats_player_id_players_id_fk",
+          "tableFrom": "match_seats",
+          "tableTo": "players",
+          "columnsFrom": [
+            "player_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "match_seats_match_id_seat_pk": {
+          "name": "match_seats_match_id_seat_pk",
+          "columns": [
+            "match_id",
+            "seat"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "match_seats_number_check": {
+          "name": "match_seats_number_check",
+          "value": "\"match_seats\".\"seat\" in (1, 2)"
+        },
+        "match_seats_kind_access_check": {
+          "name": "match_seats_kind_access_check",
+          "value": "(\"match_seats\".\"kind\" = 'human' and \"match_seats\".\"player_id\" is not null and \"match_seats\".\"seat_token\" is not null and \"match_seats\".\"bot_difficulty\" is null) or (\"match_seats\".\"kind\" = 'bot' and \"match_seats\".\"player_id\" is null and \"match_seats\".\"seat_token\" is null and \"match_seats\".\"bot_difficulty\" is not null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.matches": {
+      "name": "matches",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "hub_match_id": {
+          "name": "hub_match_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "hub_request": {
+          "name": "hub_request",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "source": {
+          "name": "source",
+          "type": "match_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mode": {
+          "name": "mode",
+          "type": "match_mode",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "phase": {
+          "name": "phase",
+          "type": "match_phase",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'placement'"
+        },
+        "winner_seat": {
+          "name": "winner_seat",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "terminal_reason": {
+          "name": "terminal_reason",
+          "type": "completion_reason",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "started_at": {
+          "name": "started_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "completed_at": {
+          "name": "completed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "matches_hub_match_id_unique": {
+          "name": "matches_hub_match_id_unique",
+          "columns": [
+            {
+              "expression": "hub_match_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "matches_nonterminal_activity_idx": {
+          "name": "matches_nonterminal_activity_idx",
+          "columns": [
+            {
+              "expression": "phase",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "updated_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "matches_winner_seat_check": {
+          "name": "matches_winner_seat_check",
+          "value": "\"matches\".\"winner_seat\" is null or \"matches\".\"winner_seat\" in (1, 2)"
+        },
+        "matches_source_hub_metadata_check": {
+          "name": "matches_source_hub_metadata_check",
+          "value": "(\"matches\".\"source\" = 'hub' and \"matches\".\"hub_match_id\" is not null and \"matches\".\"hub_request\" is not null) or (\"matches\".\"source\" = 'standalone' and \"matches\".\"hub_match_id\" is null and \"matches\".\"hub_request\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.players": {
+      "name": "players",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "identity_source": {
+          "name": "identity_source",
+          "type": "player_identity_source",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "external_id": {
+          "name": "external_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "players_identity_unique": {
+          "name": "players_identity_unique",
+          "columns": [
+            {
+              "expression": "identity_source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "external_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    }
+  },
+  "enums": {
+    "public.bot_difficulty": {
+      "name": "bot_difficulty",
+      "schema": "public",
+      "values": [
+        "easy",
+        "normal",
+        "hard"
+      ]
+    },
+    "public.completion_reason": {
+      "name": "completion_reason",
+      "schema": "public",
+      "values": [
+        "fleet_destroyed",
+        "no_players_connected",
+        "server_restart",
+        "placement_expired",
+        "battle_expired"
+      ]
+    },
+    "public.match_mode": {
+      "name": "match_mode",
+      "schema": "public",
+      "values": [
+        "singleShot",
+        "salvo",
+        "streak"
+      ]
+    },
+    "public.match_phase": {
+      "name": "match_phase",
+      "schema": "public",
+      "values": [
+        "placement",
+        "battle",
+        "completed"
+      ]
+    },
+    "public.match_source": {
+      "name": "match_source",
+      "schema": "public",
+      "values": [
+        "standalone",
+        "hub"
+      ]
+    },
+    "public.match_outcome": {
+      "name": "match_outcome",
+      "schema": "public",
+      "values": [
+        "win",
+        "loss",
+        "premature"
+      ]
+    },
+    "public.player_identity_source": {
+      "name": "player_identity_source",
+      "schema": "public",
+      "values": [
+        "standalone",
+        "hub"
+      ]
+    },
+    "public.seat_kind": {
+      "name": "seat_kind",
+      "schema": "public",
+      "values": [
+        "human",
+        "bot"
+      ]
+    }
+  },
+  "schemas": {},
+  "sequences": {},
+  "roles": {},
+  "policies": {},
+  "views": {},
+  "_meta": {
+    "columns": {},
+    "schemas": {},
+    "tables": {}
+  }
+}

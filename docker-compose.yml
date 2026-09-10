@@ -1,5 +1,17 @@
 name: battleship
 
+x-battleship-image: &battleship-image
+  image: ghcr.io/marlonf24/battleship:latest
+  pull_policy: always
+
+x-database-environment: &database-environment
+  DB_USER: ${DB_USER}
+  DB_PASSWORD: ${DB_PASSWORD}
+  DB_NAME: ${DB_NAME}
+  DB_HOST: db
+  DB_PORT: ${DB_PORT}
+  DB_SSL: ${DB_SSL:?Set DB_SSL in .env}
+
 services:
   db:
     image: postgres:17-alpine
@@ -19,28 +31,30 @@ services:
       timeout: 3s
       retries: 20
 
+  migrate:
+    <<: *battleship-image
+    command: ["bun", "run", "db:migrate"]
+    environment: *database-environment
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   server:
-    image: ghcr.io/marlonf24/battleship:latest
-    pull_policy: always
+    <<: *battleship-image
     ports:
       - "${SERVER_PORT:-8000}:${SERVER_PORT:-8000}"
     environment:
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      DB_HOST: db
-      DB_PORT: ${DB_PORT}
-      DB_SSL: ${DB_SSL:?Set DB_SSL in .env}
+      <<: *database-environment
       SERVER_PORT: ${SERVER_PORT:-8000}
       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-}
       LOG_LEVEL: ${LOG_LEVEL:?Set LOG_LEVEL in .env}
       NODE_ENV: production
-      HUB_ENABLED: ${HUB_ENABLED:?Set HUB_ENABLED in .env}
       HUB_BASE_URL: ${HUB_BASE_URL}
       PUBLIC_BASE_URL: ${PUBLIC_BASE_URL}
     depends_on:
-      db:
-        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     restart: unless-stopped
 
 volumes:

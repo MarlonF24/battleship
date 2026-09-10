@@ -10,9 +10,9 @@ Application fields:
 - `SERVER_PORT`, `VITE_PORT` (both optional and defaulted);
 - `CORS_ALLOWED_ORIGINS`;
 - `LOG_LEVEL`, `NODE_ENV`;
-- `HUB_ENABLED`, `HUB_BASE_URL`, `PUBLIC_BASE_URL`.
+- `HUB_BASE_URL`, `PUBLIC_BASE_URL`.
 
-`CORS_ALLOWED_ORIGINS` is empty for the normal same-origin deployment and accepts comma-separated external browser origins when needed. `DB_PORT` is both the PostgreSQL container port and its published host port. `HUB_ENABLED=false` requires both hub URL fields to be empty; `HUB_ENABLED=true` requires both. `HUB_BASE_URL` is server-to-server, while `PUBLIC_BASE_URL` supplies browser-reachable links returned to the hub.
+`CORS_ALLOWED_ORIGINS` is empty for the normal same-origin deployment and accepts comma-separated external browser origins when needed. `DB_PORT` is both the PostgreSQL container port and its published host port. Empty hub URLs disable integration; setting both enables it, while a partial pair fails validation. `HUB_BASE_URL` is server-to-server, while `PUBLIC_BASE_URL` supplies browser-reachable links returned to the hub.
 
 The server selects only known keys before strict validation, so unrelated shell variables are not treated as configuration. No application module reads `Bun.env` after startup. Drizzle and the server call the same five-field database URL decoder.
 
@@ -20,14 +20,13 @@ The server selects only known keys before strict validation, so unrelated shell 
 
 ```bash
 bun install --frozen-lockfile
-bun run db:push
 bun run dev
 bun run dev:server
 bun run dev:web
 bun run check
 ```
 
-Development uses the PostgreSQL instance already running on `DB_HOST` and `DB_PORT`; no development command starts a database. `db:push` explicitly synchronizes that local database with `apps/server/src/db/schema.ts`. The root `dev` command only starts the server watcher and Vite, so ordinary source changes neither start containers nor alter the schema.
+Development uses the PostgreSQL instance already running on `DB_HOST` and `DB_PORT`; no development command starts a database. `db:push` explicitly synchronizes a disposable local database with `apps/server/src/db/schema.ts`. The root `dev` command only starts the server watcher and Vite, so ordinary source changes neither start containers nor alter the schema.
 
 Open `http://localhost:<VITE_PORT>` for the Vite application. The production server serves the built SPA and its deep routes from `SERVER_PORT` instead.
 
@@ -37,9 +36,9 @@ Open `http://localhost:<VITE_PORT>` for the Vite application. The production ser
 - Vite proxies relative `/api` and WebSocket requests to Elysia at `http://localhost:<SERVER_PORT>`; returned application links remain relative and therefore stay on the Vite origin.
 - Starting only Vite renders the page, but games cannot connect unless the backend and your local PostgreSQL service are also running.
 - The production image runs one Bun process. Elysia serves the API, WebSockets, built frontend files, and the React Router fallback. There is no second frontend server in that image.
-- `docker compose up` is a separate deployment path: Compose pulls the published GHCR image, starts PostgreSQL, then lets the application container synchronize the schema before starting Elysia.
+- `docker compose up` is a separate deployment path: Compose pulls the published GHCR image, starts PostgreSQL, applies committed migrations in a one-shot job, and starts Elysia only after that job succeeds.
 
-Run `db:push` after editing the Drizzle schema or creating a fresh database. The watched development server deliberately fails when PostgreSQL is unavailable or its required tables are absent; unlike the deployment container, it never starts PostgreSQL or changes its schema.
+Run `db:push` while rapidly iterating on a disposable local database. For a durable schema change, run `db:generate`, inspect the new SQL and snapshot under `drizzle/`, and commit them with the schema change. `db:migrate` applies migrations that the configured database has not recorded yet. The watched development server deliberately fails when PostgreSQL is unavailable or its required tables are absent.
 
 ## TypeScript and editor checks
 

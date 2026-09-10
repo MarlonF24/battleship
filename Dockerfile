@@ -22,12 +22,13 @@ FROM dependencies AS runtime
 ENV NODE_ENV=production
 EXPOSE 8000
 
-# The runtime includes the schema sources required by Drizzle Kit, followed by
-# the bundled server and static frontend used after schema synchronization.
+# The runtime includes the migration inputs used by the Compose migration job,
+# followed by the bundled server and static frontend used by the server process.
 COPY apps/server/drizzle.config.ts apps/server/drizzle.config.ts
 COPY apps/server/src/config.ts apps/server/src/config.ts
 COPY apps/server/src/db/schema.ts apps/server/src/db/schema.ts
+COPY drizzle ./drizzle
 COPY --from=builder /app/apps/server/dist ./apps/server/dist
 COPY --from=builder /app/apps/web/dist ./apps/web/dist
 
-CMD ["sh", "-c", "bun run db:push && bun apps/server/dist/index.js"]
+CMD ["bun", "apps/server/dist/index.js"]

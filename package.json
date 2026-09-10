@@ -21,6 +21,8 @@
     "test": "bun test packages apps",
     "test:coverage": "bun test --coverage packages apps",
     "test:e2e": "playwright test",
+    "db:generate": "drizzle-kit generate --config apps/server/drizzle.config.ts",
+    "db:migrate": "drizzle-kit migrate --config apps/server/drizzle.config.ts",
     "db:push": "drizzle-kit push --config apps/server/drizzle.config.ts",
     "check": "bun run format:check && bun run lint && bun run typecheck && bun run test && bun run build"
   },

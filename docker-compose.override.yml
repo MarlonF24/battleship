@@ -1,6 +1,9 @@
+x-local-build: &local-build
+  build:
+    context: .
+    target: runtime
+  pull_policy: build
+
 services:
-  server:
-    build:
-      context: .
-      target: runtime
-    pull_policy: build
+  migrate: *local-build
+  server: *local-build

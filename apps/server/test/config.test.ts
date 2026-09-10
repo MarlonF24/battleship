@@ -13,7 +13,6 @@ const validEnvironment = Object.freeze({
   CORS_ALLOWED_ORIGINS: "",
   LOG_LEVEL: "info",
   NODE_ENV: "test",
-  HUB_ENABLED: "false",
   HUB_BASE_URL: "",
   PUBLIC_BASE_URL: "",
 });
@@ -66,17 +65,9 @@ describe("strict server configuration", () => {
     expect(() =>
       loadConfig({ ...validEnvironment, HUB_BASE_URL: "https://hub.example" }),
     ).toThrow();
-    expect(() =>
-      loadConfig({
-        ...validEnvironment,
-        HUB_ENABLED: "true",
-        HUB_BASE_URL: "https://hub.example",
-      }),
-    ).toThrow();
 
     const config = loadConfig({
       ...validEnvironment,
-      HUB_ENABLED: "true",
       HUB_BASE_URL: "https://hub.example",
       PUBLIC_BASE_URL: "https://battleship.example",
     });

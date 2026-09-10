@@ -31,7 +31,7 @@ Set a real `DB_PASSWORD`, review the other explicit values, then start the stack
 docker compose up
 ```
 
-Open `http://localhost:<SERVER_PORT>` (port `8000` by default). Compose pulls `ghcr.io/marlonf24/battleship:latest`, runs and publishes PostgreSQL on `DB_PORT`, then lets the application container synchronize the schema before starting its single server replica.
+Open `http://localhost:<SERVER_PORT>` (port `8000` by default). Compose pulls `ghcr.io/marlonf24/battleship:latest`, starts PostgreSQL, applies pending versioned migrations in a one-shot job, and then starts the single server replica.
 
 Pushes to `main` publish `latest` and a commit-specific tag to GitHub Container Registry. Tags such as `v1.2.3` additionally publish `1.2.3`, `1.2`, and `1`. Pull requests build the same multi-platform image without publishing it. The GHCR package must be public for unauthenticated Compose users; after its first publication, set its visibility to public in the package settings.
 
@@ -62,6 +62,8 @@ bun run dev
 ```
 
 `bun run dev` starts the API watcher and Vite concurrently without starting PostgreSQL or changing its schema. Your local PostgreSQL service must already be running. Run `db:push` after changing `apps/server/src/db/schema.ts` or creating a fresh local database. `SERVER_PORT` defaults to `8000`; `VITE_PORT` defaults to `5173` and proxies relative `/api` and WebSocket requests to the server port. Production serves the browser application and API from the same Bun server.
+
+Before committing a schema change, run `bun run db:generate` and review the generated SQL in `drizzle/`. Compose applies those committed migrations with `bun run db:migrate`; `db:push` remains a convenience for disposable development databases.
 
 Open `http://localhost:<VITE_PORT>` while developing. Game routes ask narrow touch devices to rotate to landscape because ordinary browser pages cannot reliably lock screen orientation outside fullscreen.
 

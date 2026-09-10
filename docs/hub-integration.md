@@ -7,7 +7,6 @@ A **Hub Player** is the UUID supplied by the hub. Reusing a human UUID attribute
 Enable the integration with:
 
 ```dotenv
-HUB_ENABLED=true
 HUB_BASE_URL=http://hub:8000
 PUBLIC_BASE_URL=https://battleship.example
 ```
@@ -85,24 +84,9 @@ Bot targeting maps `easy` to uniform random shots, `normal` to bounded probabili
 
 ## Hub deployment contract
 
-The repository contains two deployment paths:
+`Dockerfile` builds the complete service. One Bun process serves the API, WebSockets, and compiled React application on `SERVER_PORT`; the image exposes conventional port `8000` as metadata.
 
-- `Dockerfile` builds the complete service. One Bun process serves the API, WebSockets, and compiled React application on container port `8000`.
-- `docker-compose.hub.yml` builds that image, starts its private PostgreSQL service, and keeps both processes running for many rooms. For local integration it publishes Battleship at `127.0.0.1:8001`.
-
-Run the hub stack from the repository root:
-
-```bash
-HUB_URL=http://host.docker.internal:8000 docker compose -f docker-compose.hub.yml up --build
-```
-
-The Compose adapter accepts these deployment inputs:
-
-| Input                  | Meaning                                                                                                                                         |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `HUB_URL`              | Required hub origin reachable from the Battleship container. It becomes the application's `HUB_BASE_URL`.                                       |
-| `PUBLIC_BASE_URL`      | Browser-reachable Battleship origin. It defaults to `http://localhost:8001` for local integration and must be supplied for a hosted deployment. |
-| `BATTLESHIP_HOST_PORT` | Optional local published port; defaults to `8001`. If changed, set a matching `PUBLIC_BASE_URL`.                                                |
+The Game Night repository's top-level Compose file starts the published Battleship image and its PostgreSQL database once. A one-shot service applies committed database migrations before the server starts. The hub supplies `HUB_BASE_URL` for result delivery and `PUBLIC_BASE_URL` for returned browser links.
 
 The hub's existing per-room launcher cannot be used unchanged:
 
@@ -111,4 +95,4 @@ The hub's existing per-room launcher cannot be used unchanged:
 - Battleship exposes one container port (`8000`) for spectator pages, controller pages, HTTP, and WebSockets. It does not need separate spectator and controller ports.
 - The Compose stack is launched once and reused. Per-room `docker run --rm` would discard live sessions and database continuity.
 
-The hub's Compose branch therefore needs to start this stack once, supply its internal hub URL and public Battleship URL, then call `POST /api/v1/hub/matches` for each room.
+The hub starts this service once, supplies its internal hub URL and public Battleship URL, then calls `POST /api/v1/hub/matches` for each room.
