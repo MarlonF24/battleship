@@ -1,4 +1,4 @@
-FROM oven/bun:1.3.9-alpine AS dependencies
+FROM docker.io/oven/bun:1.3.9-alpine AS dependencies
 
 WORKDIR /app
 
