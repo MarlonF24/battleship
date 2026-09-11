@@ -17,19 +17,6 @@ export function AppShell({
     <div
       className={`app-shell bg-page h-dvh ${gameLayout ? "game-shell overflow-hidden" : "overflow-x-hidden overflow-y-auto"}`}
     >
-      <section
-        role="status"
-        className="layout-guard h-dvh flex-col items-center justify-center gap-3 px-8 text-center"
-      >
-        <span aria-hidden="true" className="text-primary text-5xl">
-          ↻
-        </span>
-        <strong className="text-primary text-xl">More space needed</strong>
-        <p className="max-w-sm text-sm text-[#666] italic">
-          Rotate your device to landscape or enlarge the window so the complete
-          board and controls remain usable.
-        </p>
-      </section>
       <header className="app-title-bar bg-header py-5 text-center text-white shadow-[0_2px_8px_rgb(0_0_0/0.04)]">
         <Link
           to="/"

@@ -97,7 +97,7 @@ export const PlacementView = observer(function PlacementView({
           </AlertDialog.Trigger>
           <AlertDialog.Portal>
             <AlertDialog.Overlay className="fixed inset-0 z-[1200] bg-black/50" />
-            <AlertDialog.Content className="fixed top-1/2 left-1/2 z-[1201] max-h-[90vh] w-[min(90vw,28rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg bg-white p-5 shadow-[0_4px_12px_rgb(0_0_0/0.15)]">
+            <AlertDialog.Content className="safe-dialog fixed top-1/2 left-1/2 z-[1201] max-h-[90vh] w-[min(90vw,28rem)] -translate-x-1/2 -translate-y-1/2 overflow-auto rounded-lg bg-white p-5 shadow-[0_4px_12px_rgb(0_0_0/0.15)]">
               <AlertDialog.Title className="text-center text-xl font-bold">
                 Ready to start the game?
               </AlertDialog.Title>

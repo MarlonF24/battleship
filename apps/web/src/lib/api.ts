@@ -15,6 +15,17 @@ function apiClient() {
   return treaty<App>(window.location.origin);
 }
 
+/** Generate a UUID on both secure origins and plain-HTTP local networks. */
+export function browserUuid(): string {
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const value = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return `${value.slice(0, 8)}-${value.slice(8, 12)}-${value.slice(12, 16)}-${value.slice(16, 20)}-${value.slice(20)}`;
+}
+
 /** Route-derived seat token identifying either a player seat or spectator. */
 export type LiveMatchIdentity =
   | Readonly<{ role: "player"; matchId: string; seatToken: string }>
@@ -115,7 +126,7 @@ export function standalonePlayerId(): string {
   const storageKey = "battleship.standalone-player-id";
   const existing = window.localStorage.getItem(storageKey);
   if (existing) return existing;
-  const generated = crypto.randomUUID();
+  const generated = browserUuid();
   window.localStorage.setItem(storageKey, generated);
   return generated;
 }

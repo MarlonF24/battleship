@@ -65,7 +65,7 @@ bun run dev
 
 Before committing a schema change, run `bun run db:generate` and review the generated SQL in `drizzle/`. Compose applies those committed migrations with `bun run db:migrate`; `db:push` remains a convenience for disposable development databases.
 
-Open `http://localhost:<VITE_PORT>` while developing. Game routes ask narrow touch devices to rotate to landscape because ordinary browser pages cannot reliably lock screen orientation outside fullscreen.
+Open `http://localhost:<VITE_PORT>` while developing. Game routes scale their board geometry to the available container and keep the complete playable interface usable in both phone orientations.
 
 The quality commands are:
 

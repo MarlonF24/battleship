@@ -80,7 +80,7 @@
 
   .placement-geometry {
     --cell-size: clamp(
-      20px,
+      12px,
       min(calc((100cqw - 2rem) / 15), calc((100cqh - 0.25rem) / 10)),
       30px
     );
@@ -97,7 +97,7 @@
   }
 
   .app-main {
-    height: calc(100dvh - 90px);
+    height: calc(100dvh - 90px - env(safe-area-inset-top));
   }
 
   .game-content,
@@ -116,19 +116,15 @@
      of clipping the welcome card. */
   .app-shell:not(.game-shell) .app-main {
     height: auto;
-    min-height: calc(100dvh - 90px);
+    min-height: calc(100dvh - 90px - env(safe-area-inset-top));
     overflow: visible;
-  }
-
-  .layout-guard {
-    display: none;
   }
 
   .battle-all-boards,
   .battle-single-board {
     --cell-size: clamp(
-      20px,
-      min(calc((100cqw - 6.5rem) / 10), calc((100cqh - 0.5rem) / 10)),
+      12px,
+      min(calc((100cqw - 9rem) / 10), calc((100cqh - 0.5rem) / 10)),
       30px
     );
     --fleet-cell-size: clamp(8px, calc(var(--cell-size) * 0.46), 14px);
@@ -152,8 +148,8 @@
      Keeping them inside the responsive view hides them whenever both boards fit. */
   .battle-stage-completed .battle-single-board {
     --cell-size: clamp(
-      20px,
-      min(calc((100cqw - 6.5rem) / 10), calc((100cqh - 4rem) / 10)),
+      12px,
+      min(calc((100cqw - 9rem) / 10), calc((100cqh - 4rem) / 10)),
       30px
     );
   }
@@ -178,6 +174,37 @@
   }
 }
 
+/* Keep every page inside display cutouts and mobile home indicators. These
+   declarations intentionally outrank the utility padding on AppShell. */
+.app-title-bar {
+  padding-top: calc(1.25rem + env(safe-area-inset-top));
+  padding-right: calc(1rem + env(safe-area-inset-right));
+  padding-left: calc(1rem + env(safe-area-inset-left));
+}
+
+.app-main {
+  padding-right: calc(0.5rem + env(safe-area-inset-right));
+  padding-bottom: calc(0.75rem + env(safe-area-inset-bottom));
+  padding-left: calc(0.5rem + env(safe-area-inset-left));
+}
+
+.safe-dialog {
+  max-width: calc(
+    100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 1rem
+  );
+  max-height: calc(
+    100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 1rem
+  );
+}
+
+@media (min-width: 40rem) {
+  .app-main {
+    padding-right: calc(1rem + env(safe-area-inset-right));
+    padding-bottom: calc(1.25rem + env(safe-area-inset-bottom));
+    padding-left: calc(1rem + env(safe-area-inset-left));
+  }
+}
+
 @keyframes recent-shot-pulse {
   0%,
   100% {
@@ -192,12 +219,18 @@
 }
 
 /* Two groups fit horizontally, including on ordinary landscape phones. */
-@container battle-stage (min-width: 40rem) and (min-height: 13rem) {
+@container battle-stage (min-width: 27rem) and (min-height: 8rem) {
   .battle-all-boards,
   .battle-single-board {
+    /* The width bounds cover both minimum-size and proportionally scaling
+       fleet markers; height independently caps the two square boards. */
     --cell-size: clamp(
-      20px,
-      min(calc((100cqw - 18rem) / 20), calc((100cqh - 0.5rem) / 10)),
+      12px,
+      min(
+        calc((100cqw - 11rem) / 21),
+        calc((100cqw - 1.25rem) / 30),
+        calc((100cqh - 0.5rem) / 10)
+      ),
       30px
     );
   }
@@ -213,12 +246,12 @@
 }
 
 /* A narrow but tall stage stacks the same two indivisible groups. */
-@container battle-stage (max-width: 39.999rem) and (min-height: 27rem) {
+@container battle-stage (max-width: 26.999rem) and (min-height: 16.5rem) {
   .battle-all-boards,
   .battle-single-board {
     --cell-size: clamp(
-      20px,
-      min(calc((100cqw - 6.5rem) / 10), calc((100cqh - 1rem) / 20)),
+      12px,
+      min(calc((100cqw - 9rem) / 10), calc((100cqh - 1rem) / 20)),
       30px
     );
   }
@@ -241,7 +274,8 @@
 
   .game-shell .app-main {
     height: 100dvh;
-    padding-block: 0.5rem;
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
   }
 }
 
@@ -261,7 +295,8 @@
 
 @media (max-height: 460px) {
   .game-shell .app-main {
-    padding-block: 0.25rem;
+    padding-top: calc(0.25rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.25rem + env(safe-area-inset-bottom));
   }
 
   .placement-actions {
@@ -281,42 +316,33 @@
   }
 }
 
-/* On a tall narrow display, seeing both boards outranks optional match chrome.
-   Very tall windows naturally restore that chrome through the rules above. */
+/* Tall portrait phones retain compact match context while the app title yields
+   its space. Shorter portrait windows still prioritize the complete boards. */
 @media (max-width: 39.999rem) and (min-height: 40rem) and (max-height: 55.999rem) {
   .game-shell:has(.battle-view) .app-title-bar,
+  .game-shell:has(.battle-view) .match-id-card {
+    display: none;
+  }
+
+  .game-shell:has(.battle-view) .mobile-match-id-copy {
+    display: inline-flex;
+  }
+
   .game-shell:has(.battle-view) .match-header,
   .game-shell:has(.battle-view) .turn-indicator {
-    display: none;
+    margin-bottom: 0.5rem;
   }
 
   .game-shell:has(.battle-view) .app-main {
     height: 100dvh;
-    padding-block: 0.5rem;
+    padding-top: calc(0.5rem + env(safe-area-inset-top));
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
   }
 }
 
-/* Browsers cannot enforce a minimum window size. Below the smallest complete
-   layout, replace the game rather than clipping it or introducing scrollbars. */
-@media (max-width: 339px), (max-height: 319px) {
-  .game-shell > .layout-guard {
-    display: flex;
-  }
-
-  .game-shell > .app-title-bar,
-  .game-shell > .app-main {
-    display: none;
-  }
-}
-
-/* Mobile browsers cannot reliably lock orientation outside fullscreen. */
-@media (orientation: portrait) and (max-width: 40rem) and (pointer: coarse) {
-  .game-shell > .layout-guard {
-    display: flex;
-  }
-
-  .game-shell > .app-title-bar,
-  .game-shell > .app-main {
+@media (max-width: 39.999rem) and (min-height: 40rem) and (max-height: 47.999rem) {
+  .game-shell:has(.battle-view) .match-header,
+  .game-shell:has(.battle-view) .turn-indicator {
     display: none;
   }
 }

@@ -8,6 +8,7 @@ import {
 } from "@battleship/contracts";
 import type { ShipPlacement } from "@battleship/game-domain";
 import {
+  browserUuid,
   connectLiveMatch,
   type LiveMatchConnection,
   type LiveMatchIdentity,
@@ -123,7 +124,7 @@ export class MatchSessionStore {
   public ready(fleet: readonly ShipPlacement[]): string | null {
     return this.sendPlayerCommand({
       type: "ready",
-      requestId: crypto.randomUUID(),
+      requestId: browserUuid(),
       fleet: [...fleet],
     });
   }
@@ -132,7 +133,7 @@ export class MatchSessionStore {
   public shoot(row: number, column: number): string | null {
     return this.sendPlayerCommand({
       type: "shoot",
-      requestId: crypto.randomUUID(),
+      requestId: browserUuid(),
       row,
       column,
     });
